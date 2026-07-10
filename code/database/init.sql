@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS "user" (
     CHECK (role IN ('student', 'games-captain', 'admin', 'counter-staff', 'psu', 'faculty-coordinator', 'coach', 'private-coach', 'academic-staff')),
   university_email VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
+  preferred_name VARCHAR(255),
+  gender VARCHAR(30),
   password VARCHAR(255),
   password_set BOOLEAN NOT NULL DEFAULT FALSE,
   auth_provider VARCHAR(20) NOT NULL DEFAULT 'password'
@@ -25,6 +27,12 @@ CREATE TABLE IF NOT EXISTS "user" (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE IF EXISTS "user"
+  ADD COLUMN IF NOT EXISTS preferred_name VARCHAR(255);
+
+ALTER TABLE IF EXISTS "user"
+  ADD COLUMN IF NOT EXISTS gender VARCHAR(30);
 
 CREATE INDEX IF NOT EXISTS idx_user_id ON "user"(user_id);
 CREATE INDEX IF NOT EXISTS idx_university_email ON "user"(university_email);
@@ -115,6 +123,9 @@ CREATE TABLE IF NOT EXISTS partner_requests (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR(20) NOT NULL,
   sport VARCHAR(100) NOT NULL,
+  request_type VARCHAR(30) NOT NULL DEFAULT 'individual'
+    CHECK (request_type IN ('individual', 'team', 'friendly-match')),
+  expected_members INT NOT NULL DEFAULT 1,
   date DATE NOT NULL,
   start_time VARCHAR(10) NOT NULL,
   end_time VARCHAR(10),
@@ -127,6 +138,12 @@ CREATE TABLE IF NOT EXISTS partner_requests (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES "user"(user_id) ON DELETE CASCADE
 );
+
+ALTER TABLE IF EXISTS partner_requests
+  ADD COLUMN IF NOT EXISTS request_type VARCHAR(30) NOT NULL DEFAULT 'individual';
+
+ALTER TABLE IF EXISTS partner_requests
+  ADD COLUMN IF NOT EXISTS expected_members INT NOT NULL DEFAULT 1;
 
 CREATE TABLE IF NOT EXISTS partner_join_requests (
   id SERIAL PRIMARY KEY,
@@ -155,6 +172,33 @@ CREATE TABLE IF NOT EXISTS notifications (
   FOREIGN KEY (related_request) REFERENCES partner_requests(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS partner_chat_rooms (
+  id SERIAL PRIMARY KEY,
+  request_id INT NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (request_id) REFERENCES partner_requests(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS partner_chat_members (
+  id SERIAL PRIMARY KEY,
+  chat_id INT NOT NULL,
+  user_id VARCHAR(20) NOT NULL,
+  joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (chat_id) REFERENCES partner_chat_rooms(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES "user"(user_id) ON DELETE CASCADE,
+  UNIQUE (chat_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS partner_messages (
+  id SERIAL PRIMARY KEY,
+  chat_id INT NOT NULL,
+  sender_id VARCHAR(20) NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (chat_id) REFERENCES partner_chat_rooms(id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_id) REFERENCES "user"(user_id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_partner_requests_user_id ON partner_requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_partner_requests_status ON partner_requests(status);
 CREATE INDEX IF NOT EXISTS idx_partner_requests_date ON partner_requests(date);
@@ -162,6 +206,9 @@ CREATE INDEX IF NOT EXISTS idx_partner_join_requests_request_id ON partner_join_
 CREATE INDEX IF NOT EXISTS idx_partner_join_requests_requester_id ON partner_join_requests(requester_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_receiver_id ON notifications(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_partner_chat_rooms_request_id ON partner_chat_rooms(request_id);
+CREATE INDEX IF NOT EXISTS idx_partner_chat_members_chat_id ON partner_chat_members(chat_id);
+CREATE INDEX IF NOT EXISTS idx_partner_messages_chat_id ON partner_messages(chat_id);
 
 -- =========================
 -- COURT & VENUE AVAILABILITY SCHEMA (NEW)
