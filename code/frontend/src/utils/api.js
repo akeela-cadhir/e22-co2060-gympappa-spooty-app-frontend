@@ -102,4 +102,17 @@ export const partnerFinderAPI = {
   sendChatMessage: (requestId, data) => api.post(`/partner-finder/requests/${requestId}/chat`, data),
 };
 
+export const eventsAPI = {
+  getMeta: () => api.get('/events/meta'),
+  getApproved: () => api.get('/events/approved'),
+  getById: (eventId) => api.get(`/events/${eventId}`),
+  createRequest: (data) => api.post('/events/requests', data),
+  getMyRequests: () => api.get('/events/requests/me'),
+  getAllRequests: () => api.get('/events/requests'),
+  updateRequest: (requestId, data) => api.put(`/events/requests/${requestId}`, data),
+  cancelRequest: (requestId) => api.delete(`/events/requests/${requestId}`),
+  approveRequest: (requestId, data) => api.post(`/events/requests/${requestId}/approve`, data),
+  rejectRequest: (requestId, data) => api.post(`/events/requests/${requestId}/reject`, data),
+};
+
 export default api;

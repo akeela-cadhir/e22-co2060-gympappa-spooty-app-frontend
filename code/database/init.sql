@@ -209,6 +209,79 @@ CREATE INDEX IF NOT EXISTS idx_court_status_status ON court_status(status);
 CREATE INDEX IF NOT EXISTS idx_gym_crowd_status_location ON gym_crowd_status(location);
 
 -- =========================
+-- EVENT & TOURNAMENT MANAGEMENT TABLES
+-- =========================
+CREATE TABLE IF NOT EXISTS events (
+  id SERIAL PRIMARY KEY,
+  item_type VARCHAR(20) NOT NULL DEFAULT 'event' CHECK (item_type IN ('event','tournament')),
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  banner_path TEXT,
+  start_date DATE,
+  end_date DATE,
+  start_time VARCHAR(20),
+  end_time VARCHAR(20),
+  preparation_start_time VARCHAR(20),
+  handover_time VARCHAR(20),
+  notes TEXT,
+  main_gym_selected BOOLEAN DEFAULT FALSE,
+  selected_courts JSONB DEFAULT '[]'::jsonb,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
+  creator_id VARCHAR(20) NOT NULL,
+  request_id INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (creator_id) REFERENCES "user"(user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS event_requests (
+  id SERIAL PRIMARY KEY,
+  request_type VARCHAR(20) NOT NULL DEFAULT 'event' CHECK (request_type IN ('event','tournament')),
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  banner_path TEXT,
+  start_date DATE,
+  end_date DATE,
+  start_time VARCHAR(20),
+  end_time VARCHAR(20),
+  preparation_start_time VARCHAR(20),
+  handover_time VARCHAR(20),
+  notes TEXT,
+  main_gym_selected BOOLEAN DEFAULT FALSE,
+  selected_courts JSONB DEFAULT '[]'::jsonb,
+  sport_entries JSONB DEFAULT '[]'::jsonb,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
+  creator_id VARCHAR(20) NOT NULL,
+  review_message TEXT,
+  reviewed_by VARCHAR(20),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (creator_id) REFERENCES "user"(user_id) ON DELETE CASCADE,
+  FOREIGN KEY (reviewed_by) REFERENCES "user"(user_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS tournament_sports (
+  id SERIAL PRIMARY KEY,
+  tournament_id INT NOT NULL,
+  sport_name VARCHAR(100) NOT NULL,
+  sport_date DATE,
+  start_time VARCHAR(20),
+  end_time VARCHAR(20),
+  court_name VARCHAR(255),
+  game_banner TEXT,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tournament_id) REFERENCES events(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_creator_id ON events(creator_id);
+CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
+CREATE INDEX IF NOT EXISTS idx_event_requests_creator_id ON event_requests(creator_id);
+CREATE INDEX IF NOT EXISTS idx_event_requests_status ON event_requests(status);
+CREATE INDEX IF NOT EXISTS idx_tournament_sports_tournament_id ON tournament_sports(tournament_id);
+
+-- =========================
 -- TRIGGER FUNCTION
 -- =========================
 CREATE OR REPLACE FUNCTION update_user_updated_at()

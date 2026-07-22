@@ -19,6 +19,8 @@ import RoleManagement from './pages/RoleManagement';
 import PartnerFinder from './pages/PartnerFinder';
 import AdminCourtManagement from './pages/AdminCourtManagement';
 import StudentCourtAvailability from './pages/StudentCourtAvailability';
+import EventsAndTournaments from './pages/EventsAndTournaments';
+import EventDetail from './pages/EventDetail';
 import './styles/App.css';
 
 function App() {
@@ -103,6 +105,8 @@ function App() {
             <Route path="/partner-finder" element={<ProtectedRoute element={<PartnerFinder />} />} />
             <Route path="/student-court-availability" element={<ProtectedRoute element={<StudentCourtAvailability />} />} />
             <Route path="/admin-court-management" element={<ProtectedRoute element={<AdminCourtManagement />} />} />
+            <Route path="/events-and-tournaments" element={<ProtectedRoute element={<EventsAndTournaments />} />} />
+            <Route path="/events/:eventId" element={<ProtectedRoute element={<EventDetail />} />} />
             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
             <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
           </Routes>

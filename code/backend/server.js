@@ -10,6 +10,7 @@ import manageRoutes from './routes/manage.js';
 import adminRoutes from './routes/admin.js';
 import partnerFinderRoutes from './routes/partnerFinder.js';
 import courtRoutes from './routes/courtRoutes.js';
+import eventRoutes from './routes/events.js';
 import pool from './utils/database.js';
 
 dotenv.config();
@@ -50,6 +51,7 @@ app.use('/api/manage', manageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/partner-finder', partnerFinderRoutes);
 app.use('/api/courts', courtRoutes);
+app.use('/api/events', eventRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
