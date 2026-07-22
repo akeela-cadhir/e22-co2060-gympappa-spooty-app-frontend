@@ -102,4 +102,13 @@ export const partnerFinderAPI = {
   sendChatMessage: (requestId, data) => api.post(`/partner-finder/requests/${requestId}/chat`, data),
 };
 
+
+export const courtAPI = {
+  getAll: () => api.get('/courts'),
+  updateStatus: (id, data) => api.put(`/courts/${id}/status`, data),
+  block: (id, data) => api.put(`/courts/${id}/block`, data),
+  getCrowdLevel: () => api.get('/courts/crowd'),   // ⚠️ '/api/crowd' නෙවෙයි
+  updateCrowdLevel: (crowdLevel) => api.put('/courts/crowd', { crowdLevel }),
+};
+
 export default api;
