@@ -203,10 +203,26 @@ const EventsAndTournaments = () => {
     setMessage('');
     setError('');
     try {
-      await eventsAPI.createRequest({ ...form, selectedCourts: form.selectedCourts.map(Number) });
+      const payload = {
+        type: form.type,
+        title: form.title,
+        description: form.description,
+        bannerPath: form.bannerPath,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        preparationStartTime: form.preparationStartTime,
+        handoverTime: form.handoverTime,
+        notes: form.notes,
+        selectedCourts: form.selectedCourts.map(Number).filter(Boolean),
+        mainGymSelected: Boolean(form.mainGymSelected),
+        sportEntries: Array.isArray(form.sportEntries) ? form.sportEntries : [],
+      };
+      await eventsAPI.createRequest(payload);
       setMessage('Your request was submitted successfully.');
       setForm(initialForm);
-      refreshData();
+      await refreshData();
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to submit event request');
     }
@@ -236,10 +252,26 @@ const EventsAndTournaments = () => {
   const handleUpdateRequest = async (e) => {
     e.preventDefault();
     try {
-      await eventsAPI.updateRequest(editingId, { ...form, selectedCourts: form.selectedCourts.map(Number) });
+      const payload = {
+        type: form.type,
+        title: form.title,
+        description: form.description,
+        bannerPath: form.bannerPath,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        preparationStartTime: form.preparationStartTime,
+        handoverTime: form.handoverTime,
+        notes: form.notes,
+        selectedCourts: form.selectedCourts.map(Number).filter(Boolean),
+        mainGymSelected: Boolean(form.mainGymSelected),
+        sportEntries: Array.isArray(form.sportEntries) ? form.sportEntries : [],
+      };
+      await eventsAPI.updateRequest(editingId, payload);
       setEditingId(null);
       setForm(initialForm);
-      refreshData();
+      await refreshData();
       setMessage('Request updated successfully.');
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to update request');
@@ -293,7 +325,6 @@ const EventsAndTournaments = () => {
     <div className="events-page">
       <section className="events-page-header">
         <div>
-          <p className="events-page-eyebrow">Campus activity planning</p>
           <h1>Events & Tournaments</h1>
           <p>Discover upcoming activities, review the calendar, and manage event requests in one place.</p>
         </div>
@@ -309,19 +340,17 @@ const EventsAndTournaments = () => {
               <h2>Upcoming Highlights</h2>
               <p>Swipe through the next activities in a single moving bar.</p>
             </div>
-            <div className="events-marquee">
-              <div className="events-marquee-track">
-                {[...featuredEvents, ...featuredEvents].map((event, index) => (
-                  <Link key={`${event.id}-${index}`} to={`/events/${event.id}`} className="events-marquee-card">
-                    <div className="events-marquee-body">
-                      <span className="events-badge">{event.type === 'tournament' ? 'Tournament' : 'Event'}</span>
-                      <h3>{event.title}</h3>
-                      <p>{event.description || 'More details will appear once approved.'}</p>
-                      <small>{event.startDate} • {event.startTime || 'TBD'}</small>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+            <div className="events-highlight-list">
+              {featuredEvents.map((event) => (
+                <Link key={event.id} to={`/events/${event.id}`} className="events-highlight-card">
+                  <div className="events-highlight-body">
+                    <span className="events-badge">{event.type === 'tournament' ? 'Tournament' : 'Event'}</span>
+                    <h3>{event.title}</h3>
+                    <p>{event.description || 'More details will appear once approved.'}</p>
+                    <small>{event.startDate} • {event.startTime || 'TBD'}</small>
+                  </div>
+                </Link>
+              ))}
             </div>
           </section>
 

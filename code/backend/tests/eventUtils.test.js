@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { expandCourtSelection } from '../utils/eventUtils.js';
+import { expandCourtSelection, normalizeEventRequestPayload } from '../utils/eventUtils.js';
 
 test('expandCourtSelection reserves indoor courts when Main Gym is selected', () => {
   const courts = [
@@ -24,4 +24,20 @@ test('expandCourtSelection keeps only explicitly chosen courts when Main Gym is 
 
   const result = expandCourtSelection([2, 4], false, courts);
   assert.deepEqual(result, [2, 4]);
+});
+
+test('normalizeEventRequestPayload converts form payloads into the backend shape', () => {
+  const payload = normalizeEventRequestPayload({
+    requestType: 'tournament',
+    title: 'Campus Cup',
+    description: 'Annual games',
+    selectedCourts: '[2,4]',
+    sportEntries: '[{"sportName":"Football","date":"2026-08-01"}]',
+    mainGymSelected: true,
+  });
+
+  assert.equal(payload.type, 'tournament');
+  assert.deepEqual(payload.selectedCourts, [2, 4]);
+  assert.deepEqual(payload.sportEntries, [{ sportName: 'Football', date: '2026-08-01' }]);
+  assert.equal(payload.mainGymSelected, true);
 });

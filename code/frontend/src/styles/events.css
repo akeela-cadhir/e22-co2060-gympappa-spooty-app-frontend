@@ -22,12 +22,11 @@
 .events-section-heading { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .events-section-heading h2 { margin: 0; font-size: 18px; color: #0f172a; }
 .events-section-heading p { margin: 0; color: #64748b; font-size: 14px; }
-.events-marquee { overflow: hidden; border-radius: 14px; background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%); padding: 8px; }
-.events-marquee-track { display: flex; width: max-content; gap: 12px; animation: events-marquee 15s linear infinite; }
-.events-marquee-card { min-width: 240px; border-radius: 14px; background: linear-gradient(135deg, #0f172a 0%, #2563eb 100%); color: white; text-decoration: none; padding: 14px; }
-.events-marquee-body { display: flex; flex-direction: column; gap: 6px; }
-.events-marquee-card h3 { margin: 0; font-size: 16px; }
-.events-marquee-card p { margin: 0; font-size: 13px; opacity: 0.9; }
+.events-highlight-list { display: flex; flex-direction: column; gap: 10px; }
+.events-highlight-card { border-radius: 14px; background: linear-gradient(135deg, #0f172a 0%, #2563eb 100%); color: white; text-decoration: none; padding: 14px; }
+.events-highlight-body { display: flex; flex-direction: column; gap: 6px; }
+.events-highlight-card h3 { margin: 0; font-size: 16px; }
+.events-highlight-card p { margin: 0; font-size: 13px; opacity: 0.9; }
 .events-badge { align-self: flex-start; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.2); }
 .events-calendar-placeholder, .events-request-list, .events-side-list { display: flex; flex-direction: column; gap: 10px; }
 .events-calendar-item, .events-request-card, .events-side-link { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #f8fafc; text-decoration: none; color: inherit; }
@@ -71,5 +70,4 @@
 .btn-primary { background: #2563eb; color: white; }
 .btn-secondary { background: #e2e8f0; color: #0f172a; }
 .btn-danger { background: #ef4444; color: white; }
-@keyframes events-marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 @media (max-width: 900px) { .events-content-grid { grid-template-columns: 1fr; } .events-tournament-layout { grid-template-columns: 1fr; } .events-table-row { grid-template-columns: 1fr; } .events-form-grid, .events-detail-grid, .events-detail-list { grid-template-columns: 1fr; } .events-page { padding-inline: 10px; } }

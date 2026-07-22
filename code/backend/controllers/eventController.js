@@ -232,9 +232,9 @@ export const createEventRequest = async (req, res) => {
       `INSERT INTO event_requests (
         request_type, title, description, banner_path, start_date, end_date, start_time, end_time,
         preparation_start_time, handover_time, notes, main_gym_selected, selected_courts, sport_entries, status, creator_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
-      [requestType, title, description, bannerPath, startDate || null, endDate || null, startTime || null, endTime || null, preparationStartTime || null, handoverTime || null, notes || null, mainGymSelected, selectedCourts, JSON.stringify(sportEntries), status, userId]
+      [requestType, title, description, bannerPath, startDate || null, endDate || null, startTime || null, endTime || null, preparationStartTime || null, handoverTime || null, notes || null, mainGymSelected, JSON.stringify(selectedCourts), JSON.stringify(sportEntries), status, userId]
     );
 
     res.status(201).json({ message: 'Event request submitted successfully', request: buildRequestPayload(requestResult.rows[0]) });
