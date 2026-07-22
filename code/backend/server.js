@@ -16,19 +16,33 @@ dotenv.config();
 
 // Initialize Firebase Admin SDK
 try {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      type: "service_account",
-      private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-      project_id: process.env.FIREBASE_PROJECT_ID,
-      private_key_id: "1606055fd2e935989fe75e21729f0fc31d257b4e",
-      client_email: process.env.FIREBASE_CLIENT_EMAIL,
-      client_id: "101686913551948027000",
-      auth_uri: "https://accounts.google.com/o/oauth2/auth",
-      token_uri: "https://oauth2.googleapis.com/token",
-      auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-      client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40gympappa-final.iam.gserviceaccount.com"
-    })
+  // admin.initializeApp({
+  //   credential: admin.credential.cert({
+  //     type: "service_account",
+  //     private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+  //     project_id: process.env.FIREBASE_PROJECT_ID,
+  //     private_key_id: "1606055fd2e935989fe75e21729f0fc31d257b4e",
+  //     client_email: process.env.FIREBASE_CLIENT_EMAIL,
+  //     client_id: "101686913551948027000",
+  //     auth_uri: "https://accounts.google.com/o/oauth2/auth",
+  //     token_uri: "https://oauth2.googleapis.com/token",
+  //     auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+  //     client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40gympappa-final.iam.gserviceaccount.com"
+  //   })
+      admin.initializeApp({
+      credential: admin.credential.cert({
+        type: "service_account",
+        project_id: process.env.FIREBASE_PROJECT_ID,
+        private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,      // env එකට දාන්න
+        private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        client_email: process.env.FIREBASE_CLIENT_EMAIL,
+        client_id: process.env.FIREBASE_CLIENT_ID,                 // env එකට දාන්න
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+        client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL // env එකට දාන්න
+      })
+    
   });
   console.log('✓ Firebase initialized');
 } catch (error) {
