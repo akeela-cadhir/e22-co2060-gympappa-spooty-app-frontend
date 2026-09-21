@@ -11,6 +11,33 @@ const parseJsonArray = (value) => {
   return [];
 };
 
+const parseDateTimeValue = (dateValue, timeValue) => {
+  if (!dateValue) return null;
+  const date = String(dateValue).trim();
+  if (!date) return null;
+  const [year, month, day] = date.split('-').map((value) => Number(value));
+  if ([year, month, day].some((value) => Number.isNaN(value))) return null;
+  const time = typeof timeValue === 'string' && timeValue.trim() ? timeValue.trim() : '23:59';
+  const [hours, minutes] = time.split(':').map((value) => Number(value));
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return new Date(year, month - 1, day, hours, minutes, 0);
+};
+
+export const isEventExpired = (event = {}, now = new Date()) => {
+  const startDate = event.startDate || event.start_date;
+  const endDate = event.endDate || event.end_date;
+  const startTime = event.startTime || event.start_time;
+  const endTime = event.endTime || event.end_time;
+  const start = parseDateTimeValue(startDate, startTime);
+  const end = parseDateTimeValue(endDate || startDate, endTime || startTime || '23:59');
+
+  if (!start && !end) return false;
+  const reference = end || start;
+  if (!reference) return false;
+
+  return now.getTime() > reference.getTime();
+};
+
 export const normalizeEventRequestPayload = (body = {}) => {
   const type = String(body.type || body.requestType || 'event').trim().toLowerCase();
 

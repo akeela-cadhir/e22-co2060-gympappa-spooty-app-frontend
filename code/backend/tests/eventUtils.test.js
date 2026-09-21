@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { expandCourtSelection, normalizeEventRequestPayload } from '../utils/eventUtils.js';
+import { expandCourtSelection, isEventExpired, normalizeEventRequestPayload } from '../utils/eventUtils.js';
 
 test('expandCourtSelection reserves indoor courts when Main Gym is selected', () => {
   const courts = [
@@ -40,4 +40,13 @@ test('normalizeEventRequestPayload converts form payloads into the backend shape
   assert.deepEqual(payload.selectedCourts, [2, 4]);
   assert.deepEqual(payload.sportEntries, [{ sportName: 'Football', date: '2026-08-01' }]);
   assert.equal(payload.mainGymSelected, true);
+});
+
+test('isEventExpired marks events that have already passed their end time', () => {
+  const now = new Date('2026-08-10T12:00:00');
+  const expiredEvent = { startDate: '2026-08-10', endDate: '2026-08-10', startTime: '10:00', endTime: '11:00' };
+  const upcomingEvent = { startDate: '2026-08-10', endDate: '2026-08-10', startTime: '13:00', endTime: '16:00' };
+
+  assert.equal(isEventExpired(expiredEvent, now), true);
+  assert.equal(isEventExpired(upcomingEvent, now), false);
 });

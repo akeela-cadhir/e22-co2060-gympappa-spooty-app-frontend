@@ -1,8 +1,9 @@
 import pool from '../utils/database.js';
-import { expandCourtSelection } from '../utils/eventUtils.js';
+import { expandCourtSelection, isEventExpired } from '../utils/eventUtils.js';
 
 const normalizeType = (value = 'event') => String(value || 'event').trim().toLowerCase();
-const allowedRequestRoles = ['admin', 'psu', 'games-captain'];
+const normalizeRole = (value = '') => String(value || '').trim().toLowerCase().replace(/\s+/g, '-');
+const allowedRequestRoles = ['admin', 'psu', 'games-captain', 'sports-council'];
 
 const normalizeSelectedCourts = (value) => {
   if (Array.isArray(value)) return value;
@@ -33,29 +34,38 @@ const normalizeSportEntries = (value) => {
   return [];
 };
 
-const buildEventPayload = (row) => ({
-  id: row.id,
-  type: row.item_type,
-  title: row.title,
-  description: row.description,
-  bannerPath: row.banner_path,
-  startDate: row.start_date,
-  endDate: row.end_date,
-  startTime: row.start_time,
-  endTime: row.end_time,
-  preparationStartTime: row.preparation_start_time,
-  handoverTime: row.handover_time,
-  notes: row.notes,
-  mainGymSelected: row.main_gym_selected,
-  selectedCourts: normalizeSelectedCourts(row.selected_courts),
-  status: row.status,
-  creatorId: row.creator_id,
-  creatorName: row.creator_name,
-  creatorRole: row.creator_role,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-  sports: row.sports || [],
-});
+const buildEventPayload = (row, now = new Date()) => {
+  const payload = {
+    id: row.id,
+    type: row.item_type,
+    title: row.title,
+    description: row.description,
+    bannerPath: row.banner_path,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    preparationStartTime: row.preparation_start_time,
+    handoverTime: row.handover_time,
+    notes: row.notes,
+    mainGymSelected: row.main_gym_selected,
+    selectedCourts: normalizeSelectedCourts(row.selected_courts),
+    status: row.status,
+    creatorId: row.creator_id,
+    creatorName: row.creator_name,
+    creatorRole: row.creator_role,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    sports: row.sports || [],
+  };
+
+  const isExpired = isEventExpired(payload, now);
+  return {
+    ...payload,
+    isExpired,
+    status: isExpired ? 'expired' : payload.status,
+  };
+};
 
 const buildRequestPayload = (row) => ({
   id: row.id,
@@ -101,6 +111,7 @@ export const getEventMeta = async (req, res) => {
 
 export const listApprovedEvents = async (req, res) => {
   try {
+    const now = new Date();
     const result = await pool.query(
       `SELECT e.*, u.name AS creator_name, u.role AS creator_role
        FROM events e
@@ -125,10 +136,9 @@ export const listApprovedEvents = async (req, res) => {
       });
     }
 
-    const events = result.rows.map((row) => {
-      const payload = buildEventPayload({ ...row, sports: sportsByTournamentId.get(row.id) || [] });
-      return payload;
-    });
+    const events = result.rows
+      .map((row) => buildEventPayload({ ...row, sports: sportsByTournamentId.get(row.id) || [] }, now))
+      .filter((event) => !event.isExpired);
 
     res.json({ events });
   } catch (error) {
@@ -153,6 +163,9 @@ export const getEventById = async (req, res) => {
     }
 
     const event = buildEventPayload(eventResult.rows[0]);
+    if (event.isExpired) {
+      event.status = 'expired';
+    }
 
     if (event.type === 'tournament') {
       const sportsResult = await pool.query(
@@ -172,7 +185,7 @@ export const getEventById = async (req, res) => {
 export const createEventRequest = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const role = req.user.role;
+    const role = normalizeRole(req.user.role);
     if (!allowedRequestRoles.includes(role)) {
       return res.status(403).json({ message: 'Only PSU, games captains, and admins can create event requests.' });
     }
@@ -283,7 +296,7 @@ export const updateRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user.userId;
-    const role = req.user.role;
+    const role = normalizeRole(req.user.role);
     if (!allowedRequestRoles.includes(role)) {
       return res.status(403).json({ message: 'Only PSU, games captains, and admins can edit event requests.' });
     }
@@ -345,7 +358,7 @@ export const cancelRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user.userId;
-    const role = req.user.role;
+    const role = normalizeRole(req.user.role);
     if (!allowedRequestRoles.includes(role)) {
       return res.status(403).json({ message: 'Only PSU, games captains, and admins can cancel event requests.' });
     }

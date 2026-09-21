@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS "user" (
   user_id VARCHAR(20) PRIMARY KEY,
   role VARCHAR(50) NOT NULL DEFAULT 'student'
-    CHECK (role IN ('student', 'games-captain', 'admin', 'counter-staff', 'psu', 'faculty-coordinator', 'coach', 'private-coach', 'academic-staff')),
+    CHECK (role IN ('student', 'games-captain', 'admin', 'counter-staff', 'psu', 'sports-council', 'faculty-coordinator', 'coach', 'private-coach', 'academic-staff')),
   university_email VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
   password VARCHAR(255),
