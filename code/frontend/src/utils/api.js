@@ -110,7 +110,7 @@ export const eventsAPI = {
   getMyRequests: () => api.get('/events/requests/me'),
   getAllRequests: () => api.get('/events/requests'),
   updateRequest: (requestId, data) => api.put(`/events/requests/${requestId}`, data),
-  cancelRequest: (requestId) => api.delete(`/events/requests/${requestId}`),
+  deleteRequest: (requestId) => api.delete(`/events/requests/${requestId}`),
   approveRequest: (requestId, data) => api.post(`/events/requests/${requestId}/approve`, data),
   rejectRequest: (requestId, data) => api.post(`/events/requests/${requestId}/reject`, data),
 };

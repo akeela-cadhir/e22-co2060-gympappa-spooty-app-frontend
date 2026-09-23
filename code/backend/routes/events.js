@@ -8,7 +8,7 @@ import {
   listMyRequests,
   listAllRequests,
   updateRequest,
-  cancelRequest,
+  deleteRejectedRequest,
   approveRequest,
   rejectRequest,
 } from '../controllers/eventController.js';
@@ -21,7 +21,7 @@ router.post('/requests', authenticateToken, createEventRequest);
 router.get('/requests/me', authenticateToken, listMyRequests);
 router.get('/requests', authenticateToken, authorizeRole(['admin']), listAllRequests);
 router.put('/requests/:requestId', authenticateToken, updateRequest);
-router.delete('/requests/:requestId', authenticateToken, cancelRequest);
+router.delete('/requests/:requestId', authenticateToken, deleteRejectedRequest);
 router.post('/requests/:requestId/approve', authenticateToken, authorizeRole(['admin']), approveRequest);
 router.post('/requests/:requestId/reject', authenticateToken, authorizeRole(['admin']), rejectRequest);
 router.get('/:eventId', authenticateToken, getEventById);

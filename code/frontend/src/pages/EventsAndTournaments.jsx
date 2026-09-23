@@ -22,7 +22,7 @@ const initialForm = {
   sportEntries: [],
 };
 
-const canManageEvents = ['admin', 'psu', 'games-captain', 'sports-council'];
+const canManageEvents = ['admin', 'psu', 'games-captain'];
 
 const normalizeRole = (role) => String(role || '').trim().toLowerCase().replace(/\s+/g, '-');
 
@@ -115,7 +115,6 @@ const EventsAndTournaments = () => {
   const [user, setUser] = useState(getStoredUser());
   const [events, setEvents] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [sports, setSports] = useState([]);
   const [courts, setCourts] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
@@ -141,7 +140,6 @@ const EventsAndTournaments = () => {
         eventsAPI.getMyRequests(),
         isAdmin ? eventsAPI.getAllRequests() : Promise.resolve({ data: { requests: [] } }),
       ]);
-      setSports(metaRes.data?.sports || []);
       setCourts(metaRes.data?.courts || []);
       setEvents(approvedRes.data?.events || []);
       setRequests(requestsRes.data?.requests || []);
@@ -164,9 +162,9 @@ const EventsAndTournaments = () => {
   };
 
   const handleCreateTypeSelect = (type) => {
-    setSelectedCreateType(type);
+    setSelectedCreateType(type === 'event');
     setEditingId(null);
-    setForm((prev) => ({ ...prev, type }));
+    setForm((prev) => ({ ...prev, type: 'event' }));
   };
 
   const handleCourtToggle = (courtId) => {
@@ -188,57 +186,13 @@ const EventsAndTournaments = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleGameBannerUpload = (index, event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm((prev) => {
-        const items = [...prev.sportEntries];
-        items[index] = { ...items[index], gameBanner: reader.result || '' };
-        return { ...prev, sportEntries: items };
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAddSportEntry = (sportName = '') => {
-    setForm((prev) => ({
-      ...prev,
-      sportEntries: [
-        ...prev.sportEntries,
-        {
-          sportName: sportName || prev.sportEntries[0]?.sportName || sports[0]?.name || '',
-          date: '',
-          startTime: '',
-          endTime: '',
-          court: '',
-          gameBanner: '',
-          notes: '',
-        },
-      ],
-    }));
-  };
-
-  const handleSportEntryChange = (index, field, value) => {
-    setForm((prev) => {
-      const items = [...prev.sportEntries];
-      items[index] = { ...items[index], [field]: value };
-      return { ...prev, sportEntries: items };
-    });
-  };
-
-  const removeSportEntry = (index) => {
-    setForm((prev) => ({ ...prev, sportEntries: prev.sportEntries.filter((_, itemIndex) => itemIndex !== index) }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setError('');
     try {
       const payload = {
-        type: form.type,
+        type: 'event',
         title: form.title,
         description: form.description,
         bannerPath: form.bannerPath,
@@ -251,7 +205,7 @@ const EventsAndTournaments = () => {
         notes: form.notes,
         selectedCourts: form.selectedCourts.map(Number).filter(Boolean),
         mainGymSelected: Boolean(form.mainGymSelected),
-        sportEntries: Array.isArray(form.sportEntries) ? form.sportEntries : [],
+        sportEntries: [],
       };
       await eventsAPI.createRequest(payload);
       setMessage('Your request was submitted successfully.');
@@ -265,7 +219,7 @@ const EventsAndTournaments = () => {
 
   const handleEditRequest = (request) => {
     setEditingId(request.id);
-    setSelectedCreateType(request.type);
+    setSelectedCreateType(true);
     setForm({
       ...initialForm,
       type: request.type,
@@ -289,7 +243,7 @@ const EventsAndTournaments = () => {
     e.preventDefault();
     try {
       const payload = {
-        type: form.type,
+        type: 'event',
         title: form.title,
         description: form.description,
         bannerPath: form.bannerPath,
@@ -302,7 +256,7 @@ const EventsAndTournaments = () => {
         notes: form.notes,
         selectedCourts: form.selectedCourts.map(Number).filter(Boolean),
         mainGymSelected: Boolean(form.mainGymSelected),
-        sportEntries: Array.isArray(form.sportEntries) ? form.sportEntries : [],
+        sportEntries: [],
       };
       await eventsAPI.updateRequest(editingId, payload);
       setEditingId(null);
@@ -315,11 +269,11 @@ const EventsAndTournaments = () => {
     }
   };
 
-  const handleCancelRequest = async (requestId) => {
+  const handleDeleteRequest = async (requestId) => {
     try {
-      await eventsAPI.cancelRequest(requestId);
+      await eventsAPI.deleteRequest(requestId);
       refreshData();
-      setMessage('Request cancelled.');
+      setMessage('Rejected request deleted.');
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to cancel request');
     }
@@ -327,7 +281,11 @@ const EventsAndTournaments = () => {
 
   const handleReview = async (requestId, action) => {
     try {
-      const reason = reviewReasons[requestId] || (action === 'approve' ? 'Approved by admin' : 'Rejected by admin');
+      const reason = reviewReasons[requestId]?.trim() || (action === 'approve' ? 'Approved by admin' : '');
+      if (action === 'reject' && !reason) {
+        setError('Add a note before rejecting this request.');
+        return;
+      }
       if (action === 'approve') {
         await eventsAPI.approveRequest(requestId, { reason });
       } else {
@@ -413,10 +371,10 @@ const EventsAndTournaments = () => {
               {selectedDateEvents.length > 0 ? (
                 <div className="events-calendar-placeholder">
                   {selectedDateEvents.map((entry) => (
-                    <div key={entry.id} className="events-calendar-item">
+                    <Link key={entry.id} to={`/events/${entry.eventId}`} className="events-calendar-item">
                       <strong>{entry.title}</strong>
                       <span>{entry.type === 'tournament' ? 'Tournament' : 'Event'}</span>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
@@ -428,20 +386,17 @@ const EventsAndTournaments = () => {
           {canCreate ? (
             <section className="events-panel">
               <div className="events-section-heading">
-                <h2>{editingId ? 'Edit Request' : 'Create an Event or Tournament'}</h2>
-                <p>{editingId ? 'Update the pending request before it is reviewed.' : 'Choose Event or Tournament to begin, then submit your request.'}</p>
+                <h2>{editingId ? 'Edit Event Request' : 'Create an Event'}</h2>
+                <p>{editingId ? 'Update the pending request before it is reviewed.' : 'Create an event or tournament using one event request form.'}</p>
               </div>
-              <div className="events-type-switcher">
-                <button type="button" className={`events-type-btn ${form.type === 'event' ? 'active' : ''}`} onClick={() => handleCreateTypeSelect('event')}>Create Event</button>
-                <button type="button" className={`events-type-btn ${form.type === 'tournament' ? 'active' : ''}`} onClick={() => handleCreateTypeSelect('tournament')}>Create Tournament</button>
-              </div>
+              {!editingId ? <button type="button" className="btn-primary" onClick={() => handleCreateTypeSelect('event')}>Create Event</button> : null}
               {!editingId && !selectedCreateType ? (
-                <p className="events-role-note">Select the type above to reveal the form for your request.</p>
+                <p className="events-role-note">The form will open after you click Create Event.</p>
               ) : null}
               {(editingId || selectedCreateType) ? (
                 <form onSubmit={editingId ? handleUpdateRequest : handleSubmit} className="events-form">
                   <label className="events-form-label">
-                    Title / Tournament Name
+                    Event / Tournament Name
                     <input name="title" value={form.title} onChange={handleChange} required />
                   </label>
                   <label className="events-form-label">
@@ -454,26 +409,14 @@ const EventsAndTournaments = () => {
                   </label>
                   {form.bannerPath ? <img src={form.bannerPath} alt="Banner preview" className="events-banner-preview" /> : null}
                   <div className="events-form-grid">
-                    <label>Start Date<input type="date" name="startDate" value={form.startDate} onChange={handleChange} /></label>
-                    <label>End Date<input type="date" name="endDate" value={form.endDate} onChange={handleChange} /></label>
-                    {form.type === 'event' ? (
-                      <>
-                        <label>Start Time<input type="time" name="startTime" value={form.startTime} onChange={handleChange} /></label>
-                        <label>End Time<input type="time" name="endTime" value={form.endTime} onChange={handleChange} /></label>
-                        <label>Preparation Start<input type="time" name="preparationStartTime" value={form.preparationStartTime} onChange={handleChange} /></label>
-                        <label>Handover Time<input type="time" name="handoverTime" value={form.handoverTime} onChange={handleChange} /></label>
-                      </>
-                    ) : (
-                      <>
-                        <label>One-day Start Time<input type="time" name="startTime" value={form.startTime} onChange={handleChange} /></label>
-                        <label>One-day End Time<input type="time" name="endTime" value={form.endTime} onChange={handleChange} /></label>
-                      </>
-                    )}
+                    <label>Booking Start Date<input type="date" name="startDate" value={form.startDate} onChange={handleChange} required /></label>
+                    <label>Booking End Date<input type="date" name="endDate" value={form.endDate} onChange={handleChange} required /></label>
+                    <label>Booking Start Time<input type="time" name="startTime" value={form.startTime} onChange={handleChange} required /></label>
+                    <label>Booking End Time<input type="time" name="endTime" value={form.endTime} onChange={handleChange} required /></label>
                   </div>
 
-                  {form.type === 'event' ? (
-                    <>
-                      <div className="events-court-list">
+                  <>
+                    <div className="events-court-list">
                         <h3>Select courts</h3>
                         <div className="events-court-selector">
                           {courts.map((court) => (
@@ -487,46 +430,12 @@ const EventsAndTournaments = () => {
                             </button>
                           ))}
                         </div>
-                      </div>
-                      <label className="events-checkbox">
-                        <input type="checkbox" name="mainGymSelected" checked={form.mainGymSelected} onChange={handleChange} />
-                        Reserve the main gymnasium and all indoor courts
-                      </label>
-                    </>
-                  ) : (
-                    <div className="events-tournament-layout">
-                      <div className="events-sport-picker">
-                        <h3>Select sports</h3>
-                        <div className="events-sport-list">
-                          {sports.map((sport) => (
-                            <button key={sport.id} type="button" className="events-sport-pill" onClick={() => handleAddSportEntry(sport.name)}>
-                              <span>+</span> {sport.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="events-tournament-table">
-                        <div className="events-table-header">
-                          <h3>Game schedule</h3>
-                        </div>
-                        {form.sportEntries.length > 0 ? (
-                          <div className="events-table-body">
-                            {form.sportEntries.map((entry, index) => (
-                              <div key={`${entry.sportName}-${index}`} className="events-table-row">
-                                <input value={entry.sportName || ''} onChange={(e) => handleSportEntryChange(index, 'sportName', e.target.value)} placeholder="Sport" />
-                                <input type="date" value={entry.date || ''} onChange={(e) => handleSportEntryChange(index, 'date', e.target.value)} />
-                                <input type="time" value={entry.startTime || ''} onChange={(e) => handleSportEntryChange(index, 'startTime', e.target.value)} />
-                                <input type="time" value={entry.endTime || ''} onChange={(e) => handleSportEntryChange(index, 'endTime', e.target.value)} />
-                                <input value={entry.court || ''} onChange={(e) => handleSportEntryChange(index, 'court', e.target.value)} placeholder="Court" />
-                                <input value={entry.notes || ''} onChange={(e) => handleSportEntryChange(index, 'notes', e.target.value)} placeholder="Notes" />
-                                <button type="button" className="btn-danger" onClick={() => removeSportEntry(index)}>Remove</button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : <p>Add sport rows to build the tournament schedule.</p>}
-                      </div>
                     </div>
-                  )}
+                    <label className="events-checkbox">
+                      <input type="checkbox" name="mainGymSelected" checked={form.mainGymSelected} onChange={handleChange} />
+                      Reserve the main gymnasium and all indoor courts
+                    </label>
+                  </>
 
                   <label className="events-form-label">
                     Notes
@@ -534,10 +443,10 @@ const EventsAndTournaments = () => {
                   </label>
 
                   <div className="events-form-actions">
-                    <button type="submit" className="btn-primary">{isAdmin ? 'Create Event / Tournament' : editingId ? 'Save Request' : 'Submit Request'}</button>
+                    <button type="submit" className="btn-primary">{isAdmin ? 'Create Event' : editingId ? 'Save Request' : 'Submit Request'}</button>
                     {editingId ? <button type="button" className="btn-secondary" onClick={() => { setEditingId(null); setSelectedCreateType(null); setForm(initialForm); }}>Cancel</button> : null}
                   </div>
-                  {!isRoleAllowed ? <p className="events-role-note">Only PSU, games captains, sports council members, and admins can create event requests.</p> : null}
+                  {!isRoleAllowed ? <p className="events-role-note">Only PSU, games captains, and admins can create event requests.</p> : null}
                 </form>
               ) : null}
             </section>
@@ -556,7 +465,6 @@ const EventsAndTournaments = () => {
                   <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
-                  <option value="cancelled">Cancelled</option>
                 </select>
               </label>
               <div className="events-request-list">
@@ -572,9 +480,9 @@ const EventsAndTournaments = () => {
                       {request.status === 'pending' ? (
                         <>
                           <button className="btn-secondary" onClick={() => handleEditRequest(request)}>Edit</button>
-                          <button className="btn-danger" onClick={() => handleCancelRequest(request.id)}>Cancel</button>
                         </>
-                      ) : null}
+                      ) : request.status === 'rejected' ? <button className="btn-danger" onClick={() => handleDeleteRequest(request.id)}>Delete</button> : null}
+                      {request.status === 'rejected' && request.reviewMessage ? <small>Reason: {request.reviewMessage}</small> : null}
                     </div>
                   </div>
                 )) : <p>No requests matching this filter yet.</p>}

@@ -3,7 +3,7 @@ import { expandCourtSelection, isEventExpired } from '../utils/eventUtils.js';
 
 const normalizeType = (value = 'event') => String(value || 'event').trim().toLowerCase();
 const normalizeRole = (value = '') => String(value || '').trim().toLowerCase().replace(/\s+/g, '-');
-const allowedRequestRoles = ['admin', 'psu', 'games-captain', 'sports-council'];
+const allowedRequestRoles = ['admin', 'psu', 'games-captain'];
 
 const normalizeSelectedCourts = (value) => {
   if (Array.isArray(value)) return value;
@@ -260,6 +260,14 @@ export const createEventRequest = async (req, res) => {
 export const listMyRequests = async (req, res) => {
   try {
     const userId = req.user.userId;
+    await pool.query(
+      `DELETE FROM event_requests
+       WHERE creator_id = $1
+         AND status = 'approved'
+         AND end_date IS NOT NULL
+         AND end_date + COALESCE(NULLIF(end_time, '')::time, TIME '23:59') < CURRENT_TIMESTAMP::timestamp`,
+      [userId]
+    );
     const result = await pool.query(
       `SELECT er.*, u.name AS creator_name, u.role AS creator_role
        FROM event_requests er
@@ -282,6 +290,7 @@ export const listAllRequests = async (req, res) => {
       `SELECT er.*, u.name AS creator_name, u.role AS creator_role
        FROM event_requests er
        LEFT JOIN "user" u ON er.creator_id = u.user_id
+       WHERE er.status = 'pending'
        ORDER BY er.created_at DESC`
     );
 
@@ -354,24 +363,24 @@ export const updateRequest = async (req, res) => {
   }
 };
 
-export const cancelRequest = async (req, res) => {
+export const deleteRejectedRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user.userId;
     const role = normalizeRole(req.user.role);
     if (!allowedRequestRoles.includes(role)) {
-      return res.status(403).json({ message: 'Only PSU, games captains, and admins can cancel event requests.' });
+      return res.status(403).json({ message: 'Only PSU, games captains, and admins can delete event requests.' });
     }
-    const result = await pool.query('UPDATE event_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND creator_id = $3 AND status = $4 RETURNING *', ['cancelled', requestId, userId, 'pending']);
+    const result = await pool.query('DELETE FROM event_requests WHERE id = $1 AND creator_id = $2 AND status = $3 RETURNING id', [requestId, userId, 'rejected']);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Pending request not found' });
+      return res.status(404).json({ message: 'Rejected request not found' });
     }
 
-    res.json({ message: 'Request cancelled successfully' });
+    res.json({ message: 'Rejected request deleted successfully' });
   } catch (error) {
-    console.error('Error cancelling request:', error);
-    res.status(500).json({ message: 'Failed to cancel request', error: error.message });
+    console.error('Error deleting rejected request:', error);
+    res.status(500).json({ message: 'Failed to delete rejected request', error: error.message });
   }
 };
 
@@ -431,6 +440,9 @@ export const rejectRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const { reason } = req.body || {};
+    if (!String(reason || '').trim()) {
+      return res.status(400).json({ message: 'A rejection note is required.' });
+    }
     const result = await pool.query(
       `UPDATE event_requests
        SET status = 'rejected', review_message = $1, reviewed_by = $2, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
