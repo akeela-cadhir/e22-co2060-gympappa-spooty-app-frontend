@@ -41,6 +41,7 @@ const buildEventPayload = (row, now = new Date()) => {
     title: row.title,
     description: row.description,
     bannerPath: row.banner_path,
+    schedulePhoto: row.schedule_photo,
     startDate: row.start_date,
     endDate: row.end_date,
     startTime: row.start_time,
@@ -182,6 +183,51 @@ export const getEventById = async (req, res) => {
   }
 };
 
+export const updateEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const body = req.body || {};
+    const existingResult = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const existing = existingResult.rows[0];
+    const title = String(body.title ?? existing.title ?? '').trim();
+    if (!title) return res.status(400).json({ message: 'Title is required' });
+
+    const description = String(body.description ?? existing.description ?? '').trim();
+    const bannerPath = body.bannerPath ?? existing.banner_path ?? '';
+    const schedulePhoto = body.schedulePhoto ?? existing.schedule_photo ?? '';
+    const startDate = body.startDate ?? existing.start_date;
+    const endDate = body.endDate ?? existing.end_date;
+    const startTime = body.startTime ?? existing.start_time;
+    const endTime = body.endTime ?? existing.end_time;
+    const notes = body.notes ?? existing.notes ?? '';
+    const selectedCourts = normalizeSelectedCourts(body.selectedCourts ?? existing.selected_courts)
+      .map((courtId) => Number(courtId)).filter((courtId) => !Number.isNaN(courtId));
+    const mainGymSelected = Boolean(body.mainGymSelected ?? existing.main_gym_selected);
+
+    const updatedResult = await pool.query(
+      `UPDATE events
+       SET title = $1, description = $2, banner_path = $3, schedule_photo = $4,
+           start_date = $5, end_date = $6, start_time = $7, end_time = $8,
+           notes = $9, main_gym_selected = $10, selected_courts = $11,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12
+       RETURNING *`,
+      [title, description, bannerPath, schedulePhoto, startDate, endDate, startTime, endTime, notes, mainGymSelected, JSON.stringify(selectedCourts), eventId]
+    );
+
+    await pool.query('DELETE FROM court_status WHERE event_id = $1', [eventId]);
+    await reserveCourtsForEvent(eventId, selectedCourts, mainGymSelected, existing.item_type, [], { startDate, endDate, startTime, endTime });
+    res.json({ message: 'Event updated successfully', event: buildEventPayload(updatedResult.rows[0]) });
+  } catch (error) {
+    console.error('Error updating event:', error);
+    res.status(500).json({ message: 'Failed to update event', error: error.message });
+  }
+};
+
 export const createEventRequest = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -194,6 +240,7 @@ export const createEventRequest = async (req, res) => {
     const title = String(body.title || body.tournamentName || '').trim();
     const description = String(body.description || '').trim();
     const bannerPath = body.bannerPath || body.banner || '';
+    const schedulePhoto = body.schedulePhoto || body.schedule_photo || '';
     const startDate = body.startDate || body.start_date || null;
     const endDate = body.endDate || body.end_date || null;
     const startTime = body.startTime || body.start_time || null;
@@ -201,7 +248,9 @@ export const createEventRequest = async (req, res) => {
     const preparationStartTime = body.preparationStartTime || body.preparation_start_time || null;
     const handoverTime = body.handoverTime || body.handover_time || null;
     const notes = body.notes || '';
-    const selectedCourts = Array.isArray(body.selectedCourts) ? body.selectedCourts : [];
+    const selectedCourts = normalizeSelectedCourts(body.selectedCourts)
+      .map((courtId) => Number(courtId))
+      .filter((courtId) => !Number.isNaN(courtId));
     const mainGymSelected = Boolean(body.mainGymSelected);
     const sportEntries = Array.isArray(body.sportEntries) ? body.sportEntries : [];
 
@@ -218,11 +267,11 @@ export const createEventRequest = async (req, res) => {
     if (role === 'admin') {
       const eventResult = await pool.query(
         `INSERT INTO events (
-          item_type, title, description, banner_path, start_date, end_date, start_time, end_time,
+          item_type, title, description, banner_path, schedule_photo, start_date, end_date, start_time, end_time,
           preparation_start_time, handover_time, notes, main_gym_selected, selected_courts, status, creator_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          RETURNING id`,
-        [requestType, title, description, bannerPath, startDate || null, endDate || null, startTime || null, endTime || null, preparationStartTime || null, handoverTime || null, notes || null, mainGymSelected, selectedCourts, 'approved', userId]
+        [requestType, title, description, bannerPath, schedulePhoto, startDate || null, endDate || null, startTime || null, endTime || null, preparationStartTime || null, handoverTime || null, notes || null, mainGymSelected, JSON.stringify(selectedCourts), 'approved', userId]
       );
 
       const createdEventId = eventResult.rows[0].id;
@@ -236,7 +285,7 @@ export const createEventRequest = async (req, res) => {
         }
       }
 
-      await reserveCourtsForEvent(selectedCourts, mainGymSelected, requestType, sportEntries);
+      await reserveCourtsForEvent(createdEventId, selectedCourts, mainGymSelected, requestType, sportEntries, { startDate, endDate, startTime, endTime });
 
       return res.status(201).json({ message: 'Event created successfully', eventId: createdEventId });
     }
@@ -331,7 +380,9 @@ export const updateRequest = async (req, res) => {
     const preparationStartTime = body.preparationStartTime || body.preparation_start_time || existing.preparation_start_time;
     const handoverTime = body.handoverTime || body.handover_time || existing.handover_time;
     const notes = body.notes || existing.notes || '';
-    const selectedCourts = Array.isArray(body.selectedCourts) ? body.selectedCourts : normalizeSelectedCourts(existing.selected_courts);
+    const selectedCourts = normalizeSelectedCourts(body.selectedCourts ?? existing.selected_courts)
+      .map((courtId) => Number(courtId))
+      .filter((courtId) => !Number.isNaN(courtId));
     const mainGymSelected = Boolean(body.mainGymSelected ?? existing.main_gym_selected);
     const sportEntries = Array.isArray(body.sportEntries) ? body.sportEntries : normalizeSportEntries(existing.sport_entries);
 
@@ -353,7 +404,7 @@ export const updateRequest = async (req, res) => {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $14 AND creator_id = $15
        RETURNING *`,
-      [title, description, bannerPath, startDate, endDate, startTime, endTime, preparationStartTime, handoverTime, notes, mainGymSelected, selectedCourts, JSON.stringify(sportEntries), requestId, userId]
+      [title, description, bannerPath, startDate, endDate, startTime, endTime, preparationStartTime, handoverTime, notes, mainGymSelected, JSON.stringify(selectedCourts), JSON.stringify(sportEntries), requestId, userId]
     );
 
     res.json({ message: 'Request updated successfully', request: buildRequestPayload(updatedResult.rows[0]) });
@@ -405,7 +456,7 @@ export const approveRequest = async (req, res) => {
         preparation_start_time, handover_time, notes, main_gym_selected, selected_courts, status, creator_id, request_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id`,
-      [request.request_type, request.title, request.description, request.banner_path, request.start_date, request.end_date, request.start_time, request.end_time, request.preparation_start_time, request.handover_time, request.notes, request.main_gym_selected, request.selected_courts || [], 'approved', request.creator_id, request.id]
+      [request.request_type, request.title, request.description, request.banner_path, request.start_date, request.end_date, request.start_time, request.end_time, request.preparation_start_time, request.handover_time, request.notes, request.main_gym_selected, JSON.stringify(normalizeSelectedCourts(request.selected_courts)), 'approved', request.creator_id, request.id]
     );
 
     const createdEventId = eventResult.rows[0].id;
@@ -420,7 +471,7 @@ export const approveRequest = async (req, res) => {
       }
     }
 
-    await reserveCourtsForEvent(normalizeSelectedCourts(request.selected_courts), request.main_gym_selected, request.request_type, normalizeSportEntries(request.sport_entries));
+    await reserveCourtsForEvent(createdEventId, normalizeSelectedCourts(request.selected_courts), request.main_gym_selected, request.request_type, normalizeSportEntries(request.sport_entries), request);
 
     await pool.query(
       `UPDATE event_requests
@@ -462,7 +513,7 @@ export const rejectRequest = async (req, res) => {
   }
 };
 
-const reserveCourtsForEvent = async (selectedCourts = [], mainGymSelected = false, requestType = 'event', sportEntries = []) => {
+const reserveCourtsForEvent = async (eventId, selectedCourts = [], mainGymSelected = false, requestType = 'event', sportEntries = [], booking = {}) => {
   const courtsResult = await pool.query(
     `SELECT id, name, location,
             CASE WHEN LOWER(COALESCE(location, '')) LIKE '%indoor%' OR name ILIKE '%main gym%' THEN true ELSE false END AS is_indoor
@@ -483,8 +534,16 @@ const reserveCourtsForEvent = async (selectedCourts = [], mainGymSelected = fals
   for (const courtId of uniqueCourtIds) {
     await pool.query(
       `INSERT INTO court_status (court_id, status, reason, updated_by)
-       VALUES ($1, 'reserved', 'Reserved for approved event', null)`,
+       VALUES ($1, 'reserved', 'Reserved for approved event', null)
+       RETURNING id`,
       [courtId]
+    );
+    await pool.query(
+      `UPDATE court_status
+       SET event_id = $1, booking_start_date = $2, booking_end_date = $3,
+           booking_start_time = $4, booking_end_time = $5
+       WHERE id = (SELECT id FROM court_status WHERE court_id = $6 ORDER BY updated_at DESC, id DESC LIMIT 1)`,
+      [eventId, booking.startDate || booking.start_date || null, booking.endDate || booking.end_date || null, booking.startTime || booking.start_time || null, booking.endTime || booking.end_time || null, courtId]
     );
   }
 };

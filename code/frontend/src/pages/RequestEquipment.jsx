@@ -4,7 +4,7 @@ import '../styles/template.css';
 
 const getStoredStudentId = () => {
   try {
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const storedUser = JSON.parse(sessionStorage.getItem('user') || '{}');
     return storedUser?.userId || storedUser?.user_id || '';
   } catch {
     return '';

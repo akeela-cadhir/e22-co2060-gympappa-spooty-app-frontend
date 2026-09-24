@@ -29,18 +29,18 @@ function App() {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const token = localStorage.getItem('token');
-      const userData = localStorage.getItem('user');
+      const token = sessionStorage.getItem('token');
+      const userData = sessionStorage.getItem('user');
 
       if (token && userData) {
         try {
           const profileResponse = await authAPI.getProfile();
           const freshUser = profileResponse.data?.user || JSON.parse(userData);
           setUser(freshUser);
-          localStorage.setItem('user', JSON.stringify(freshUser));
+          sessionStorage.setItem('user', JSON.stringify(freshUser));
         } catch (error) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          sessionStorage.removeItem('token');
+          sessionStorage.removeItem('user');
           setUser(null);
         }
       } else {
@@ -52,8 +52,8 @@ function App() {
     initializeAuth();
 
     const handleAuthStateChange = () => {
-      const updatedToken = localStorage.getItem('token');
-      const updatedUserData = localStorage.getItem('user');
+      const updatedToken = sessionStorage.getItem('token');
+      const updatedUserData = sessionStorage.getItem('user');
       if (updatedToken && updatedUserData) {
         try {
           setUser(JSON.parse(updatedUserData));

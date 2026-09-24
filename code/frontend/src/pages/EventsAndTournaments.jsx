@@ -26,9 +26,28 @@ const canManageEvents = ['admin', 'psu', 'games-captain'];
 
 const normalizeRole = (role) => String(role || '').trim().toLowerCase().replace(/\s+/g, '-');
 
+const formatBookingRange = (item) => {
+  const start = `${item.startDate || 'TBD'} ${item.startTime || ''}`.trim();
+  const end = `${item.endDate || item.startDate || 'TBD'} ${item.endTime || ''}`.trim();
+  return `${start} to ${end}`;
+};
+
+const formatInputBookingRange = (item) => {
+  const formatTime = (value) => {
+    if (!value) return 'TBD';
+    const [hours, minutes] = value.split(':').map(Number);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+    const suffix = hours >= 12 ? 'PM' : 'AM';
+    const displayHour = hours % 12 || 12;
+    return `${displayHour}.${String(minutes).padStart(2, '0')}${suffix}`;
+  };
+  const formatDate = (value) => value ? value.replaceAll('-', '/') : 'TBD';
+  return `${formatDate(item.startDate)} ${formatTime(item.startTime)} to ${formatDate(item.endDate || item.startDate)} ${formatTime(item.endTime)}`;
+};
+
 const getStoredUser = () => {
   try {
-    return JSON.parse(localStorage.getItem('user') || '{}');
+    return JSON.parse(sessionStorage.getItem('user') || '{}');
   } catch {
     return {};
   }
@@ -67,46 +86,21 @@ const isEventExpired = (event = {}, now = new Date()) => {
 
 const buildCalendarEntries = (events = []) => {
   return events.flatMap((event) => {
-    const baseDate = event.startDate;
+    if (!event.startDate) return [];
+    const start = new Date(`${event.startDate}T00:00:00`);
+    const end = new Date(`${event.endDate || event.startDate}T00:00:00`);
     const entries = [];
-
-    if (event.type === 'tournament') {
-      const sports = Array.isArray(event.sports) ? event.sports : [];
-      if (sports.length > 0) {
-        sports.forEach((sport, index) => {
-          const sportDate = sport.sport_date || baseDate;
-          if (!sportDate) return;
-          entries.push({
-            id: `${event.id}-sport-${index}`,
-            eventId: event.id,
-            date: sportDate,
-            title: `${event.title} • ${sport.sport_name || sport.sportName || 'Game'}`,
-            type: 'tournament',
-            event,
-            sport,
-          });
-        });
-      } else if (baseDate) {
-        entries.push({
-          id: `${event.id}-tournament`,
-          eventId: event.id,
-          date: baseDate,
-          title: event.title,
-          type: 'tournament',
-          event,
-        });
-      }
-    } else if (baseDate) {
+    for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+      const dateKey = formatDateKey(date);
       entries.push({
-        id: `${event.id}-event`,
+        id: `${event.id}-${dateKey}`,
         eventId: event.id,
-        date: baseDate,
+        date: dateKey,
         title: event.title,
-        type: 'event',
+        type: event.type,
         event,
       });
     }
-
     return entries;
   }).sort((a, b) => a.date.localeCompare(b.date));
 };
@@ -155,6 +149,15 @@ const EventsAndTournaments = () => {
   useEffect(() => {
     refreshData();
   }, []);
+
+  useEffect(() => {
+    if (!message && !error) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setMessage('');
+      setError('');
+    }, 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [message, error]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -349,7 +352,6 @@ const EventsAndTournaments = () => {
                     <span className="events-badge">{event.type === 'tournament' ? 'Tournament' : 'Event'}</span>
                     <h3>{event.title}</h3>
                     <p>{event.description || 'More details will appear once approved.'}</p>
-                    <small>{event.startDate} • {event.startTime || 'TBD'}</small>
                   </div>
                 </Link>
               )) : <p>No upcoming events right now.</p>}
@@ -383,7 +385,7 @@ const EventsAndTournaments = () => {
             </div>
           </section>
 
-          {canCreate ? (
+          {canCreate && !isAdmin ? (
             <section className="events-panel">
               <div className="events-section-heading">
                 <h2>{editingId ? 'Edit Event Request' : 'Create an Event'}</h2>
@@ -414,6 +416,7 @@ const EventsAndTournaments = () => {
                     <label>Booking Start Time<input type="time" name="startTime" value={form.startTime} onChange={handleChange} required /></label>
                     <label>Booking End Time<input type="time" name="endTime" value={form.endTime} onChange={handleChange} required /></label>
                   </div>
+                  <p className="events-booking-preview"><strong>Booking duration:</strong> {formatInputBookingRange(form)}</p>
 
                   <>
                     <div className="events-court-list">
@@ -495,6 +498,7 @@ const EventsAndTournaments = () => {
               <div className="events-section-heading">
                 <h2>Admin Review Queue</h2>
                 <p>Review request details before accepting or declining them.</p>
+                {allRequests.length > 0 ? <span className="events-review-alert">{allRequests.length} request{allRequests.length === 1 ? '' : 's'} waiting for review</span> : null}
               </div>
               <div className="events-request-list">
                 {allRequests.length > 0 ? allRequests.map((request) => (
@@ -506,9 +510,8 @@ const EventsAndTournaments = () => {
                       {expandedRequestId === request.id ? (
                         <div className="events-request-preview">
                           <p><strong>Type:</strong> {request.type === 'tournament' ? 'Tournament' : 'Event'}</p>
-                          <p><strong>Dates:</strong> {request.startDate || 'TBD'} {request.endDate ? `to ${request.endDate}` : ''}</p>
-                          <p><strong>Times:</strong> {request.startTime || 'TBD'} {request.endTime ? `- ${request.endTime}` : ''}</p>
-                          <p><strong>Courts:</strong> {(request.selectedCourts || []).join(', ') || 'None selected'}</p>
+                          <p><strong>Booking:</strong> {formatBookingRange(request)}</p>
+                          <p><strong>Courts:</strong> {(request.selectedCourts || []).map((courtId) => courts.find((court) => Number(court.id) === Number(courtId))?.name || `Court ${courtId}`).join(', ') || 'None selected'}</p>
                           {request.sportEntries?.length ? <p><strong>Games:</strong> {request.sportEntries.map((entry) => entry.sportName || entry.sport).filter(Boolean).join(', ')}</p> : null}
                         </div>
                       ) : null}
@@ -525,6 +528,26 @@ const EventsAndTournaments = () => {
                     </div>
                   </div>
                 )) : <p>No pending requests to review.</p>}
+              </div>
+            </section>
+          ) : null}
+
+          {isAdmin ? (
+            <section className="events-panel">
+              <div className="events-section-heading">
+                <h2>Created Events</h2>
+                <p>Events created directly by administrators and approved requests.</p>
+              </div>
+              <div className="events-request-list">
+                {events.length > 0 ? events.map((event) => (
+                  <Link key={event.id} to={`/events/${event.id}`} className="events-request-card">
+                    <div className="events-request-main">
+                      <h3>{event.title}</h3>
+                      <small>{formatBookingRange(event)}</small>
+                    </div>
+                    <span className="events-badge">{event.status}</span>
+                  </Link>
+                )) : <p>No created events yet.</p>}
               </div>
             </section>
           ) : null}

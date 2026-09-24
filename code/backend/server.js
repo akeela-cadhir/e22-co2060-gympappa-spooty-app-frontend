@@ -11,7 +11,7 @@ import adminRoutes from './routes/admin.js';
 import partnerFinderRoutes from './routes/partnerFinder.js';
 import courtRoutes from './routes/courtRoutes.js';
 import eventRoutes from './routes/events.js';
-import pool from './utils/database.js';
+import { ensureEventSchema } from './utils/database.js';
 
 dotenv.config();
 
@@ -76,9 +76,22 @@ app.listen(PORT, () => {
 */
 
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await ensureEventSchema();
+    console.log('✓ Event and court schema is ready');
+  } catch (error) {
+    console.error('✗ Event and court schema migration failed:', error.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+};
+
+startServer();
 
 
 /*

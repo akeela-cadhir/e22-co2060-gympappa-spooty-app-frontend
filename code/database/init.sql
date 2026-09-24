@@ -186,11 +186,22 @@ CREATE TABLE IF NOT EXISTS court_status (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_by VARCHAR(20),
   reason TEXT,
+  event_id INT,
+  booking_start_date DATE,
+  booking_end_date DATE,
+  booking_start_time VARCHAR(20),
+  booking_end_time VARCHAR(20),
 
 
   FOREIGN KEY (court_id) REFERENCES courts(id) ON DELETE CASCADE,
   FOREIGN KEY (updated_by) REFERENCES "user"(user_id) ON DELETE SET NULL
 );
+
+ALTER TABLE court_status ADD COLUMN IF NOT EXISTS event_id INT;
+ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_start_date DATE;
+ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_end_date DATE;
+ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_start_time VARCHAR(20);
+ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_end_time VARCHAR(20);
 
 CREATE TABLE IF NOT EXISTS gym_crowd_status (
   id SERIAL PRIMARY KEY,
@@ -217,6 +228,7 @@ CREATE TABLE IF NOT EXISTS events (
   title VARCHAR(255) NOT NULL,
   description TEXT,
   banner_path TEXT,
+  schedule_photo TEXT,
   start_date DATE,
   end_date DATE,
   start_time VARCHAR(20),
@@ -233,6 +245,8 @@ CREATE TABLE IF NOT EXISTS events (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (creator_id) REFERENCES "user"(user_id) ON DELETE CASCADE
 );
+
+ALTER TABLE events ADD COLUMN IF NOT EXISTS schedule_photo TEXT;
 
 CREATE TABLE IF NOT EXISTS event_requests (
   id SERIAL PRIMARY KEY,

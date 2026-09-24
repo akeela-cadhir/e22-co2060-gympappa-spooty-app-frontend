@@ -4,6 +4,7 @@ import {
   getEventMeta,
   listApprovedEvents,
   getEventById,
+  updateEvent,
   createEventRequest,
   listMyRequests,
   listAllRequests,
@@ -24,6 +25,7 @@ router.put('/requests/:requestId', authenticateToken, updateRequest);
 router.delete('/requests/:requestId', authenticateToken, deleteRejectedRequest);
 router.post('/requests/:requestId/approve', authenticateToken, authorizeRole(['admin']), approveRequest);
 router.post('/requests/:requestId/reject', authenticateToken, authorizeRole(['admin']), rejectRequest);
+router.put('/:eventId', authenticateToken, authorizeRole(['admin']), updateEvent);
 router.get('/:eventId', authenticateToken, getEventById);
 
 export default router;

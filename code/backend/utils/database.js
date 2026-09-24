@@ -58,4 +58,15 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
+export const ensureEventSchema = async () => {
+  await pool.query(`
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS schedule_photo TEXT;
+    ALTER TABLE court_status ADD COLUMN IF NOT EXISTS event_id INT;
+    ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_start_date DATE;
+    ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_end_date DATE;
+    ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_start_time VARCHAR(20);
+    ALTER TABLE court_status ADD COLUMN IF NOT EXISTS booking_end_time VARCHAR(20);
+  `);
+};
+
 export default pool;

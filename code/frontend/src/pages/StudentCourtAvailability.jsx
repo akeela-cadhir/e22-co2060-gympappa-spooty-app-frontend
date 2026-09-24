@@ -5,7 +5,7 @@ import '../styles/admin-court-management.css';
 
 const getStoredUser = () => {
   try {
-    return JSON.parse(localStorage.getItem('user') || '{}');
+    return JSON.parse(sessionStorage.getItem('user') || '{}');
   } catch {
     return {};
   }
@@ -159,7 +159,7 @@ const StudentCourtAvailability = () => {
 
       const response = await axios.get('/api/courts', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${sessionStorage.getItem('token')}`,
         },
       });
 
@@ -188,7 +188,7 @@ const StudentCourtAvailability = () => {
     try {
       const response = await axios.get('/api/crowd', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${sessionStorage.getItem('token')}`,
         },
       });
       setCrowdLevel(response.data?.crowd_level || 'Low');
