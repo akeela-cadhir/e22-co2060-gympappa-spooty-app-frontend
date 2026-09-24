@@ -533,7 +533,7 @@ import '../styles/admin-court-management.css';
 
 const getStoredUser = () => {
   try {
-    return JSON.parse(localStorage.getItem('user') || '{}');
+    return JSON.parse(sessionStorage.getItem('user') || '{}');
   } catch {
     return {};
   }

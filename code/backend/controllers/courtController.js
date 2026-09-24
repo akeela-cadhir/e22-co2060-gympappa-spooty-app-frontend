@@ -26,7 +26,7 @@ export const getAllCourts = async (req, res) => {
          SELECT status, reason, updated_at, updated_by
          FROM court_status
          WHERE court_id = c.id
-         ORDER BY updated_at DESC
+         ORDER BY CASE WHEN event_id IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC
          LIMIT 1
        ) cs ON true
        ORDER BY c.name`
@@ -63,6 +63,14 @@ export const getAllCourts = async (req, res) => {
          SELECT status, reason, updated_at
          FROM court_status
          WHERE court_id = c.id
+           AND (
+             event_id IS NULL
+             OR (
+               booking_start_date IS NOT NULL
+               AND booking_start_date + COALESCE(NULLIF(booking_start_time, '')::time, TIME '00:00') <= CURRENT_TIMESTAMP::timestamp
+               AND COALESCE(booking_end_date, booking_start_date) + COALESCE(NULLIF(booking_end_time, '')::time, TIME '23:59:59') >= CURRENT_TIMESTAMP::timestamp
+             )
+           )
          ORDER BY updated_at DESC
          LIMIT 1
        ) cs ON true

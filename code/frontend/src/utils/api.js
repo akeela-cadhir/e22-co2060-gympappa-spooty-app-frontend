@@ -9,7 +9,7 @@ const api = axios.create({
 
 // Add token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -22,8 +22,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Clear auth state on any unauthorized response and redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       window.dispatchEvent(new Event('authStateChanged'));
       window.location.href = '/login';
     }
@@ -102,6 +102,19 @@ export const partnerFinderAPI = {
   sendChatMessage: (requestId, data) => api.post(`/partner-finder/requests/${requestId}/chat`, data),
 };
 
+export const eventsAPI = {
+  getMeta: () => api.get('/events/meta'),
+  getApproved: () => api.get('/events/approved'),
+  getById: (eventId) => api.get(`/events/${eventId}`),
+  update: (eventId, data) => api.put(`/events/${eventId}`, data),
+  createRequest: (data) => api.post('/events/requests', data),
+  getMyRequests: () => api.get('/events/requests/me'),
+  getAllRequests: () => api.get('/events/requests'),
+  updateRequest: (requestId, data) => api.put(`/events/requests/${requestId}`, data),
+  deleteRequest: (requestId) => api.delete(`/events/requests/${requestId}`),
+  approveRequest: (requestId, data) => api.post(`/events/requests/${requestId}/approve`, data),
+  rejectRequest: (requestId, data) => api.post(`/events/requests/${requestId}/reject`, data),
+};
 
 export const courtAPI = {
   getAll: () => api.get('/courts'),
