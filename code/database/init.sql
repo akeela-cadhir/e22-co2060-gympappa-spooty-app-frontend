@@ -313,6 +313,24 @@ BEFORE UPDATE ON "user"
 FOR EACH ROW
 EXECUTE FUNCTION update_user_updated_at();
 
+-- SAMPLE COURT STATUS ROWS
+INSERT INTO court_status (court_id, status, reason)
+SELECT c.id, v.status, v.reason
+FROM (VALUES
+  ('Badminton Court', 'occupied', 'Inter-university practice session'),
+  ('Basketball Court', 'reserved', 'Evening tournament booking'),
+  ('Cricket Ground', 'maintenance', 'Pitch preparation and grass work'),
+  ('Tennis Court', 'available', 'Open for student booking'),
+  ('Main Gymnasium Hall', 'reserved', 'Special event setup')
+) AS v(court_name, status, reason)
+JOIN courts c ON c.name = v.court_name
+WHERE NOT EXISTS (
+  SELECT 1 FROM court_status cs
+  WHERE cs.court_id = c.id
+    AND cs.status = v.status
+    AND COALESCE(cs.reason, '') = COALESCE(v.reason, '')
+);
+
 -- =========================
 -- INSERT SAMPLE DATA (SAFE / NON-DUPLICATING)
 -- =========================

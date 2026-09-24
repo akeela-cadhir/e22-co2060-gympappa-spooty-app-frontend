@@ -116,4 +116,12 @@ export const eventsAPI = {
   rejectRequest: (requestId, data) => api.post(`/events/requests/${requestId}/reject`, data),
 };
 
+export const courtAPI = {
+  getAll: () => api.get('/courts'),
+  updateStatus: (id, data) => api.put(`/courts/${id}/status`, data),
+  block: (id, data) => api.put(`/courts/${id}/block`, data),
+  getCrowdLevel: () => api.get('/courts/crowd'),   // ⚠️ '/api/crowd' නෙවෙයි
+  updateCrowdLevel: (crowdLevel) => api.put('/courts/crowd', { crowdLevel }),
+};
+
 export default api;
