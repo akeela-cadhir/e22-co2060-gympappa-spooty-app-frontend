@@ -364,7 +364,9 @@ If you need to reload the schema and seed data:
 
 ```bash
 cd code/database
-psql -U postgres -d gympappa < init.sql
+psql -U postgres -d gympappa < init.sql  : to run in mac
+psql -U postgres -d gympappa -f init.sql  : to run in windows
+
 ```
 
 The script is intended to be safe to run multiple times.

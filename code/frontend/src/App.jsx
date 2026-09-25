@@ -19,6 +19,8 @@ import RoleManagement from './pages/RoleManagement';
 import PartnerFinder from './pages/PartnerFinder';
 import AdminCourtManagement from './pages/AdminCourtManagement';
 import StudentCourtAvailability from './pages/StudentCourtAvailability';
+import EventsAndTournaments from './pages/EventsAndTournaments';
+import EventDetail from './pages/EventDetail';
 import './styles/App.css';
 
 function App() {
@@ -27,18 +29,18 @@ function App() {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const token = localStorage.getItem('token');
-      const userData = localStorage.getItem('user');
+      const token = sessionStorage.getItem('token');
+      const userData = sessionStorage.getItem('user');
 
       if (token && userData) {
         try {
           const profileResponse = await authAPI.getProfile();
           const freshUser = profileResponse.data?.user || JSON.parse(userData);
           setUser(freshUser);
-          localStorage.setItem('user', JSON.stringify(freshUser));
+          sessionStorage.setItem('user', JSON.stringify(freshUser));
         } catch (error) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          sessionStorage.removeItem('token');
+          sessionStorage.removeItem('user');
           setUser(null);
         }
       } else {
@@ -50,8 +52,8 @@ function App() {
     initializeAuth();
 
     const handleAuthStateChange = () => {
-      const updatedToken = localStorage.getItem('token');
-      const updatedUserData = localStorage.getItem('user');
+      const updatedToken = sessionStorage.getItem('token');
+      const updatedUserData = sessionStorage.getItem('user');
       if (updatedToken && updatedUserData) {
         try {
           setUser(JSON.parse(updatedUserData));
@@ -103,6 +105,8 @@ function App() {
             <Route path="/partner-finder" element={<ProtectedRoute element={<PartnerFinder />} />} />
             <Route path="/student-court-availability" element={<ProtectedRoute element={<StudentCourtAvailability />} />} />
             <Route path="/admin-court-management" element={<ProtectedRoute element={<AdminCourtManagement />} />} />
+            <Route path="/events-and-tournaments" element={<ProtectedRoute element={<EventsAndTournaments />} />} />
+            <Route path="/events/:eventId" element={<ProtectedRoute element={<EventDetail />} />} />
             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
             <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
           </Routes>

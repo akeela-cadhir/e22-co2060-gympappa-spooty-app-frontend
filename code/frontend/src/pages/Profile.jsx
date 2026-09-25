@@ -387,6 +387,11 @@ const Profile = () => {
                   
                   <div className="info-grid">
                     <div className="info-item">
+                      <span className="label">Name:</span>
+                      <span className="value">{profile.name}</span>
+                    </div>
+
+                    <div className="info-item">
                       <span className="label">Email (University):</span>
                       <span className="value">{profile.email}</span>
                     </div>

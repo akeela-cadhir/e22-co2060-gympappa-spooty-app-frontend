@@ -1,5 +1,14 @@
 import pool from '../utils/database.js';
 
+const normalizeStatusForDb = (status = '') => {
+  const value = String(status).trim().toLowerCase();
+
+  if (value === 'blocked') return 'maintenance';
+  if (['available', 'occupied', 'reserved', 'maintenance'].includes(value)) return value;
+
+  return null;
+};
+
 /*
 export const getAllCourts = async (req, res) => {
   try {
@@ -17,7 +26,7 @@ export const getAllCourts = async (req, res) => {
          SELECT status, reason, updated_at, updated_by
          FROM court_status
          WHERE court_id = c.id
-         ORDER BY updated_at DESC
+         ORDER BY CASE WHEN event_id IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC
          LIMIT 1
        ) cs ON true
        ORDER BY c.name`
@@ -38,7 +47,14 @@ export const getAllCourts = async (req, res) => {
               c.location,
               c.capacity,
               s.name AS sport,
-              cs.status,
+              CASE
+                WHEN cs.status IS NULL THEN NULL
+                WHEN LOWER(cs.status) = 'available' THEN 'Available'
+                WHEN LOWER(cs.status) = 'occupied' THEN 'Occupied'
+                WHEN LOWER(cs.status) = 'reserved' THEN 'Reserved'
+                WHEN LOWER(cs.status) IN ('maintenance', 'blocked') THEN 'Blocked'
+                ELSE cs.status
+              END AS status,
               cs.reason,
               cs.updated_at
        FROM courts c
@@ -47,6 +63,14 @@ export const getAllCourts = async (req, res) => {
          SELECT status, reason, updated_at
          FROM court_status
          WHERE court_id = c.id
+           AND (
+             event_id IS NULL
+             OR (
+               booking_start_date IS NOT NULL
+               AND booking_start_date + COALESCE(NULLIF(booking_start_time, '')::time, TIME '00:00') <= CURRENT_TIMESTAMP::timestamp
+               AND COALESCE(booking_end_date, booking_start_date) + COALESCE(NULLIF(booking_end_time, '')::time, TIME '23:59:59') >= CURRENT_TIMESTAMP::timestamp
+             )
+           )
          ORDER BY updated_at DESC
          LIMIT 1
        ) cs ON true
@@ -63,23 +87,30 @@ export const getAllCourts = async (req, res) => {
 export const updateCourtStatus = async (req, res) => {
   try {
     const courtId = parseInt(req.params.id, 10);
-    const { status, reason, startTime, endTime } = req.body;
+    const { status, reason } = req.body;
     const updatedBy = req.user?.userId || null;
+    const normalizedStatus = normalizeStatusForDb(status);
 
-    if (!courtId || !status) {
+    if (!courtId || !normalizedStatus) {
       return res.status(400).json({ message: 'Court ID and status are required' });
     }
 
     const result = await pool.query(
-      `INSERT INTO court_status (court_id, status, reason, start_time, end_time, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO court_status (court_id, status, reason, updated_by)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [courtId, status, reason || null, startTime || new Date(), endTime || new Date(Date.now() + 3600000), updatedBy]
+      [courtId, normalizedStatus, reason || null, updatedBy]
     );
 
     res.json({ message: 'Court status updated successfully', courtStatus: result.rows[0] });
   } catch (error) {
     console.error('Court status update error:', error);
+    if (error.code === '23503') {
+      return res.status(404).json({ message: 'Court not found' });
+    }
+    if (error.code === '23514') {
+      return res.status(400).json({ message: 'Invalid court status value' });
+    }
     res.status(500).json({ message: 'Failed to update court status', error: error.message });
   }
 };
@@ -87,7 +118,7 @@ export const updateCourtStatus = async (req, res) => {
 export const blockCourt = async (req, res) => {
   try {
     const courtId = parseInt(req.params.id, 10);
-    const { reason, startTime, endTime } = req.body;
+    const { reason } = req.body;
     const updatedBy = req.user?.userId || null;
 
     if (!courtId) {
@@ -95,15 +126,21 @@ export const blockCourt = async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO court_status (court_id, status, reason, start_time, end_time, updated_by)
-       VALUES ($1, 'Blocked', $2, $3, $4, $5)
+      `INSERT INTO court_status (court_id, status, reason, updated_by)
+       VALUES ($1, 'maintenance', $2, $3)
        RETURNING *`,
-      [courtId, reason || 'Blocked by admin', startTime || new Date(), endTime || new Date(Date.now() + 3600000), updatedBy]
+      [courtId, reason || 'Blocked by admin', updatedBy]
     );
 
     res.json({ message: 'Court blocked successfully', courtStatus: result.rows[0] });
   } catch (error) {
     console.error('Block court error:', error);
+    if (error.code === '23503') {
+      return res.status(404).json({ message: 'Court not found' });
+    }
+    if (error.code === '23514') {
+      return res.status(400).json({ message: 'Invalid court status value' });
+    }
     res.status(500).json({ message: 'Failed to block court', error: error.message });
   }
 };
