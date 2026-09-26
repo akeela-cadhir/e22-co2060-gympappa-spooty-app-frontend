@@ -211,7 +211,7 @@ const EventsAndTournaments = () => {
         sportEntries: [],
       };
       await eventsAPI.createRequest(payload);
-      setMessage('Your request was submitted successfully.');
+      setMessage(isAdmin ? 'Event created successfully.' : 'Your request was submitted successfully.');
       setSelectedCreateType(null);
       setForm(initialForm);
       await refreshData();
@@ -385,11 +385,11 @@ const EventsAndTournaments = () => {
             </div>
           </section>
 
-          {canCreate && !isAdmin ? (
+          {canCreate ? (
             <section className="events-panel">
               <div className="events-section-heading">
                 <h2>{editingId ? 'Edit Event Request' : 'Create an Event'}</h2>
-                <p>{editingId ? 'Update the pending request before it is reviewed.' : 'Create an event or tournament using one event request form.'}</p>
+                <p>{editingId ? 'Update the pending request before it is reviewed.' : isAdmin ? 'Create an event directly.' : 'Create an event or tournament using one event request form.'}</p>
               </div>
               {!editingId ? <button type="button" className="btn-primary" onClick={() => handleCreateTypeSelect('event')}>Create Event</button> : null}
               {!editingId && !selectedCreateType ? (
@@ -455,7 +455,7 @@ const EventsAndTournaments = () => {
             </section>
           ) : null}
 
-          {canCreate ? (
+          {canCreate && !isAdmin ? (
           <section className="events-panel">
               <div className="events-section-heading">
                 <h2>My Requests</h2>
