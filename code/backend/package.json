@@ -17,6 +17,6 @@
     "firebase-admin": "^14.5.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
-    "sequelize": "^3.30.0"
+    "sequelize": "^6.37.8"
   }
 }
