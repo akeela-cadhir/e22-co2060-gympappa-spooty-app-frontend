@@ -1,0 +1,549 @@
+import pool from '../utils/database.js';
+import { expandCourtSelection, isEventExpired } from '../utils/eventUtils.js';
+
+const normalizeType = (value = 'event') => String(value || 'event').trim().toLowerCase();
+const normalizeRole = (value = '') => String(value || '').trim().toLowerCase().replace(/\s+/g, '-');
+const allowedRequestRoles = ['admin', 'psu', 'games-captain'];
+
+const normalizeSelectedCourts = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value);
+  }
+  return [];
+};
+
+const normalizeSportEntries = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const buildEventPayload = (row, now = new Date()) => {
+  const payload = {
+    id: row.id,
+    type: row.item_type,
+    title: row.title,
+    description: row.description,
+    bannerPath: row.banner_path,
+    schedulePhoto: row.schedule_photo,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    preparationStartTime: row.preparation_start_time,
+    handoverTime: row.handover_time,
+    notes: row.notes,
+    mainGymSelected: row.main_gym_selected,
+    selectedCourts: normalizeSelectedCourts(row.selected_courts),
+    status: row.status,
+    creatorId: row.creator_id,
+    creatorName: row.creator_name,
+    creatorRole: row.creator_role,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    sports: row.sports || [],
+  };
+
+  const isExpired = isEventExpired(payload, now);
+  return {
+    ...payload,
+    isExpired,
+    status: isExpired ? 'expired' : payload.status,
+  };
+};
+
+const buildRequestPayload = (row) => ({
+  id: row.id,
+  type: row.request_type,
+  title: row.title,
+  description: row.description,
+  bannerPath: row.banner_path,
+  startDate: row.start_date,
+  endDate: row.end_date,
+  startTime: row.start_time,
+  endTime: row.end_time,
+  preparationStartTime: row.preparation_start_time,
+  handoverTime: row.handover_time,
+  notes: row.notes,
+  mainGymSelected: row.main_gym_selected,
+  selectedCourts: normalizeSelectedCourts(row.selected_courts),
+  sportEntries: normalizeSportEntries(row.sport_entries),
+  status: row.status,
+  creatorId: row.creator_id,
+  creatorName: row.creator_name,
+  creatorRole: row.creator_role,
+  reviewMessage: row.review_message,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const getEventMeta = async (req, res) => {
+  try {
+    const sportsResult = await pool.query('SELECT id, name FROM sports ORDER BY name ASC');
+    const courtsResult = await pool.query(
+      `SELECT id, name, location,
+              CASE WHEN LOWER(COALESCE(location, '')) LIKE '%indoor%' OR name ILIKE '%main gym%' THEN true ELSE false END AS is_indoor
+       FROM courts
+       ORDER BY name ASC`
+    );
+
+    res.json({ sports: sportsResult.rows, courts: courtsResult.rows });
+  } catch (error) {
+    console.error('Error loading event meta:', error);
+    res.status(500).json({ message: 'Failed to load event metadata', error: error.message });
+  }
+};
+
+export const listApprovedEvents = async (req, res) => {
+  try {
+    const now = new Date();
+    const result = await pool.query(
+      `SELECT e.*, u.name AS creator_name, u.role AS creator_role
+       FROM events e
+       LEFT JOIN "user" u ON e.creator_id = u.user_id
+       WHERE e.status = 'approved'
+       ORDER BY e.start_date ASC, e.start_time ASC`
+    );
+
+    const tournamentIds = result.rows.filter((row) => row.item_type === 'tournament').map((row) => row.id);
+    const sportsByTournamentId = new Map();
+
+    if (tournamentIds.length > 0) {
+      const sportsResult = await pool.query(
+        `SELECT * FROM tournament_sports WHERE tournament_id = ANY($1::int[]) ORDER BY tournament_id, sport_date ASC, start_time ASC`,
+        [tournamentIds]
+      );
+
+      sportsResult.rows.forEach((sport) => {
+        const existing = sportsByTournamentId.get(sport.tournament_id) || [];
+        existing.push(sport);
+        sportsByTournamentId.set(sport.tournament_id, existing);
+      });
+    }
+
+    const events = result.rows
+      .map((row) => buildEventPayload({ ...row, sports: sportsByTournamentId.get(row.id) || [] }, now))
+      .filter((event) => !event.isExpired);
+
+    res.json({ events });
+  } catch (error) {
+    console.error('Error listing events:', error);
+    res.status(500).json({ message: 'Failed to fetch events', error: error.message });
+  }
+};
+
+export const getEventById = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const eventResult = await pool.query(
+      `SELECT e.*, u.name AS creator_name, u.role AS creator_role
+       FROM events e
+       LEFT JOIN "user" u ON e.creator_id = u.user_id
+       WHERE e.id = $1`,
+      [eventId]
+    );
+
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const event = buildEventPayload(eventResult.rows[0]);
+    if (event.isExpired) {
+      event.status = 'expired';
+    }
+
+    if (event.type === 'tournament') {
+      const sportsResult = await pool.query(
+        `SELECT * FROM tournament_sports WHERE tournament_id = $1 ORDER BY sport_date ASC, start_time ASC`,
+        [eventId]
+      );
+      event.sports = sportsResult.rows;
+    }
+
+    res.json({ event });
+  } catch (error) {
+    console.error('Error fetching event details:', error);
+    res.status(500).json({ message: 'Failed to fetch event details', error: error.message });
+  }
+};
+
+export const updateEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const body = req.body || {};
+    const existingResult = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const existing = existingResult.rows[0];
+    const title = String(body.title ?? existing.title ?? '').trim();
+    if (!title) return res.status(400).json({ message: 'Title is required' });
+
+    const description = String(body.description ?? existing.description ?? '').trim();
+    const bannerPath = body.bannerPath ?? existing.banner_path ?? '';
+    const schedulePhoto = body.schedulePhoto ?? existing.schedule_photo ?? '';
+    const startDate = body.startDate ?? existing.start_date;
+    const endDate = body.endDate ?? existing.end_date;
+    const startTime = body.startTime ?? existing.start_time;
+    const endTime = body.endTime ?? existing.end_time;
+    const notes = body.notes ?? existing.notes ?? '';
+    const selectedCourts = normalizeSelectedCourts(body.selectedCourts ?? existing.selected_courts)
+      .map((courtId) => Number(courtId)).filter((courtId) => !Number.isNaN(courtId));
+    const mainGymSelected = Boolean(body.mainGymSelected ?? existing.main_gym_selected);
+
+    const updatedResult = await pool.query(
+      `UPDATE events
+       SET title = $1, description = $2, banner_path = $3, schedule_photo = $4,
+           start_date = $5, end_date = $6, start_time = $7, end_time = $8,
+           notes = $9, main_gym_selected = $10, selected_courts = $11,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12
+       RETURNING *`,
+      [title, description, bannerPath, schedulePhoto, startDate, endDate, startTime, endTime, notes, mainGymSelected, JSON.stringify(selectedCourts), eventId]
+    );
+
+    await pool.query('DELETE FROM court_status WHERE event_id = $1', [eventId]);
+    await reserveCourtsForEvent(eventId, selectedCourts, mainGymSelected, existing.item_type, [], { startDate, endDate, startTime, endTime });
+    res.json({ message: 'Event updated successfully', event: buildEventPayload(updatedResult.rows[0]) });
+  } catch (error) {
+    console.error('Error updating event:', error);
+    res.status(500).json({ message: 'Failed to update event', error: error.message });
+  }
+};
+
+export const createEventRequest = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const role = normalizeRole(req.user.role);
+    if (!allowedRequestRoles.includes(role)) {
+      return res.status(403).json({ message: 'Only PSU, games captains, and admins can create event requests.' });
+    }
+    const body = req.body || {};
+    const requestType = normalizeType(body.type || body.requestType);
+    const title = String(body.title || body.tournamentName || '').trim();
+    const description = String(body.description || '').trim();
+    const bannerPath = body.bannerPath || body.banner || '';
+    const schedulePhoto = body.schedulePhoto || body.schedule_photo || '';
+    const startDate = body.startDate || body.start_date || null;
+    const endDate = body.endDate || body.end_date || null;
+    const startTime = body.startTime || body.start_time || null;
+    const endTime = body.endTime || body.end_time || null;
+    const preparationStartTime = body.preparationStartTime || body.preparation_start_time || null;
+    const handoverTime = body.handoverTime || body.handover_time || null;
+    const notes = body.notes || '';
+    const selectedCourts = normalizeSelectedCourts(body.selectedCourts)
+      .map((courtId) => Number(courtId))
+      .filter((courtId) => !Number.isNaN(courtId));
+    const mainGymSelected = Boolean(body.mainGymSelected);
+    const sportEntries = Array.isArray(body.sportEntries) ? body.sportEntries : [];
+
+    if (!title) {
+      return res.status(400).json({ message: 'Title is required' });
+    }
+
+    if (requestType === 'tournament' && sportEntries.length === 0) {
+      return res.status(400).json({ message: 'At least one sport entry is required for tournaments' });
+    }
+
+    const status = role === 'admin' ? 'approved' : 'pending';
+
+    if (role === 'admin') {
+      const eventResult = await pool.query(
+        `INSERT INTO events (
+          item_type, title, description, banner_path, schedule_photo, start_date, end_date, start_time, end_time,
+          preparation_start_time, handover_time, notes, main_gym_selected, selected_courts, status, creator_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         RETURNING id`,
+        [requestType, title, description, bannerPath, schedulePhoto, startDate || null, endDate || null, startTime || null, endTime || null, preparationStartTime || null, handoverTime || null, notes || null, mainGymSelected, JSON.stringify(selectedCourts), 'approved', userId]
+      );
+
+      const createdEventId = eventResult.rows[0].id;
+      if (requestType === 'tournament') {
+        for (const entry of sportEntries) {
+          await pool.query(
+            `INSERT INTO tournament_sports (tournament_id, sport_name, sport_date, start_time, end_time, court_name, game_banner, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [createdEventId, entry.sportName || entry.sport || null, entry.date || null, entry.startTime || null, entry.endTime || null, entry.court || null, entry.gameBanner || null, entry.notes || null]
+          );
+        }
+      }
+
+      await reserveCourtsForEvent(createdEventId, selectedCourts, mainGymSelected, requestType, sportEntries, { startDate, endDate, startTime, endTime });
+
+      return res.status(201).json({ message: 'Event created successfully', eventId: createdEventId });
+    }
+
+    const requestResult = await pool.query(
+      `INSERT INTO event_requests (
+        request_type, title, description, banner_path, start_date, end_date, start_time, end_time,
+        preparation_start_time, handover_time, notes, main_gym_selected, selected_courts, sport_entries, status, creator_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       RETURNING *`,
+      [requestType, title, description, bannerPath, startDate || null, endDate || null, startTime || null, endTime || null, preparationStartTime || null, handoverTime || null, notes || null, mainGymSelected, JSON.stringify(selectedCourts), JSON.stringify(sportEntries), status, userId]
+    );
+
+    res.status(201).json({ message: 'Event request submitted successfully', request: buildRequestPayload(requestResult.rows[0]) });
+  } catch (error) {
+    console.error('Error creating event request:', error);
+    res.status(500).json({ message: 'Failed to submit event request', error: error.message });
+  }
+};
+
+export const listMyRequests = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    await pool.query(
+      `DELETE FROM event_requests
+       WHERE creator_id = $1
+         AND status = 'approved'
+         AND end_date IS NOT NULL
+         AND end_date + COALESCE(NULLIF(end_time, '')::time, TIME '23:59') < CURRENT_TIMESTAMP::timestamp`,
+      [userId]
+    );
+    const result = await pool.query(
+      `SELECT er.*, u.name AS creator_name, u.role AS creator_role
+       FROM event_requests er
+       LEFT JOIN "user" u ON er.creator_id = u.user_id
+       WHERE er.creator_id = $1
+       ORDER BY er.created_at DESC`,
+      [userId]
+    );
+
+    res.json({ requests: result.rows.map(buildRequestPayload) });
+  } catch (error) {
+    console.error('Error listing my requests:', error);
+    res.status(500).json({ message: 'Failed to fetch your event requests', error: error.message });
+  }
+};
+
+export const listAllRequests = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT er.*, u.name AS creator_name, u.role AS creator_role
+       FROM event_requests er
+       LEFT JOIN "user" u ON er.creator_id = u.user_id
+       WHERE er.status = 'pending'
+       ORDER BY er.created_at DESC`
+    );
+
+    res.json({ requests: result.rows.map(buildRequestPayload) });
+  } catch (error) {
+    console.error('Error listing all requests:', error);
+    res.status(500).json({ message: 'Failed to fetch requests', error: error.message });
+  }
+};
+
+export const updateRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.userId;
+    const role = normalizeRole(req.user.role);
+    if (!allowedRequestRoles.includes(role)) {
+      return res.status(403).json({ message: 'Only PSU, games captains, and admins can edit event requests.' });
+    }
+    const body = req.body || {};
+    const result = await pool.query('SELECT * FROM event_requests WHERE id = $1 AND creator_id = $2', [requestId, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    const existing = result.rows[0];
+    if (existing.status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending requests can be edited' });
+    }
+
+    const title = String(body.title || body.tournamentName || existing.title || '').trim();
+    const description = String(body.description || existing.description || '').trim();
+    const bannerPath = body.bannerPath || body.banner || existing.banner_path || '';
+    const startDate = body.startDate || body.start_date || existing.start_date;
+    const endDate = body.endDate || body.end_date || existing.end_date;
+    const startTime = body.startTime || body.start_time || existing.start_time;
+    const endTime = body.endTime || body.end_time || existing.end_time;
+    const preparationStartTime = body.preparationStartTime || body.preparation_start_time || existing.preparation_start_time;
+    const handoverTime = body.handoverTime || body.handover_time || existing.handover_time;
+    const notes = body.notes || existing.notes || '';
+    const selectedCourts = normalizeSelectedCourts(body.selectedCourts ?? existing.selected_courts)
+      .map((courtId) => Number(courtId))
+      .filter((courtId) => !Number.isNaN(courtId));
+    const mainGymSelected = Boolean(body.mainGymSelected ?? existing.main_gym_selected);
+    const sportEntries = Array.isArray(body.sportEntries) ? body.sportEntries : normalizeSportEntries(existing.sport_entries);
+
+    const updatedResult = await pool.query(
+      `UPDATE event_requests
+       SET title = $1,
+           description = $2,
+           banner_path = $3,
+           start_date = $4,
+           end_date = $5,
+           start_time = $6,
+           end_time = $7,
+           preparation_start_time = $8,
+           handover_time = $9,
+           notes = $10,
+           main_gym_selected = $11,
+           selected_courts = $12,
+           sport_entries = $13,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $14 AND creator_id = $15
+       RETURNING *`,
+      [title, description, bannerPath, startDate, endDate, startTime, endTime, preparationStartTime, handoverTime, notes, mainGymSelected, JSON.stringify(selectedCourts), JSON.stringify(sportEntries), requestId, userId]
+    );
+
+    res.json({ message: 'Request updated successfully', request: buildRequestPayload(updatedResult.rows[0]) });
+  } catch (error) {
+    console.error('Error updating request:', error);
+    res.status(500).json({ message: 'Failed to update request', error: error.message });
+  }
+};
+
+export const deleteRejectedRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.userId;
+    const role = normalizeRole(req.user.role);
+    if (!allowedRequestRoles.includes(role)) {
+      return res.status(403).json({ message: 'Only PSU, games captains, and admins can delete event requests.' });
+    }
+    const result = await pool.query('DELETE FROM event_requests WHERE id = $1 AND creator_id = $2 AND status = $3 RETURNING id', [requestId, userId, 'rejected']);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Rejected request not found' });
+    }
+
+    res.json({ message: 'Rejected request deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting rejected request:', error);
+    res.status(500).json({ message: 'Failed to delete rejected request', error: error.message });
+  }
+};
+
+export const approveRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { reason } = req.body || {};
+    const requestResult = await pool.query('SELECT * FROM event_requests WHERE id = $1', [requestId]);
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    const request = requestResult.rows[0];
+    if (request.status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending requests can be approved' });
+    }
+
+    const eventResult = await pool.query(
+      `INSERT INTO events (
+        item_type, title, description, banner_path, start_date, end_date, start_time, end_time,
+        preparation_start_time, handover_time, notes, main_gym_selected, selected_courts, status, creator_id, request_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       RETURNING id`,
+      [request.request_type, request.title, request.description, request.banner_path, request.start_date, request.end_date, request.start_time, request.end_time, request.preparation_start_time, request.handover_time, request.notes, request.main_gym_selected, JSON.stringify(normalizeSelectedCourts(request.selected_courts)), 'approved', request.creator_id, request.id]
+    );
+
+    const createdEventId = eventResult.rows[0].id;
+    if (request.request_type === 'tournament') {
+      const sportEntries = normalizeSportEntries(request.sport_entries);
+      for (const entry of sportEntries) {
+        await pool.query(
+          `INSERT INTO tournament_sports (tournament_id, sport_name, sport_date, start_time, end_time, court_name, game_banner, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [createdEventId, entry.sportName || entry.sport || null, entry.date || null, entry.startTime || null, entry.endTime || null, entry.court || null, entry.gameBanner || null, entry.notes || null]
+        );
+      }
+    }
+
+    await reserveCourtsForEvent(createdEventId, normalizeSelectedCourts(request.selected_courts), request.main_gym_selected, request.request_type, normalizeSportEntries(request.sport_entries), request);
+
+    await pool.query(
+      `UPDATE event_requests
+       SET status = 'approved', review_message = $1, reviewed_by = $2, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3`,
+      [reason || 'Approved by admin', req.user.userId, requestId]
+    );
+
+    res.json({ message: 'Request approved successfully', eventId: createdEventId });
+  } catch (error) {
+    console.error('Error approving request:', error);
+    res.status(500).json({ message: 'Failed to approve request', error: error.message });
+  }
+};
+
+export const rejectRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { reason } = req.body || {};
+    if (!String(reason || '').trim()) {
+      return res.status(400).json({ message: 'A rejection note is required.' });
+    }
+    const result = await pool.query(
+      `UPDATE event_requests
+       SET status = 'rejected', review_message = $1, reviewed_by = $2, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3 AND status = 'pending'
+       RETURNING *`,
+      [reason || 'Rejected by admin', req.user.userId, requestId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Pending request not found' });
+    }
+
+    res.json({ message: 'Request rejected successfully' });
+  } catch (error) {
+    console.error('Error rejecting request:', error);
+    res.status(500).json({ message: 'Failed to reject request', error: error.message });
+  }
+};
+
+const reserveCourtsForEvent = async (eventId, selectedCourts = [], mainGymSelected = false, requestType = 'event', sportEntries = [], booking = {}) => {
+  const courtsResult = await pool.query(
+    `SELECT id, name, location,
+            CASE WHEN LOWER(COALESCE(location, '')) LIKE '%indoor%' OR name ILIKE '%main gym%' THEN true ELSE false END AS is_indoor
+     FROM courts
+     ORDER BY name ASC`
+  );
+
+  const selectedIds = Array.isArray(selectedCourts) ? selectedCourts : [];
+  const courtNameValues = (sportEntries || []).map((entry) => entry?.court).filter((value) => typeof value === 'string' && value.trim());
+  const courtNameSet = new Set(courtNameValues.map((value) => value.toLowerCase().trim()));
+  const courtIds = expandCourtSelection(selectedIds, mainGymSelected, courtsResult.rows);
+  const courtNameMatches = courtsResult.rows
+    .filter((court) => courtNameSet.has(String(court.name || '').toLowerCase().trim()))
+    .map((court) => Number(court.id))
+    .filter((id) => !Number.isNaN(id));
+
+  const uniqueCourtIds = [...new Set([...courtIds, ...courtNameMatches])].filter((id) => id);
+  for (const courtId of uniqueCourtIds) {
+    await pool.query(
+      `INSERT INTO court_status (court_id, status, reason, updated_by)
+       VALUES ($1, 'reserved', 'Reserved for approved event', null)
+       RETURNING id`,
+      [courtId]
+    );
+    await pool.query(
+      `UPDATE court_status
+       SET event_id = $1, booking_start_date = $2, booking_end_date = $3,
+           booking_start_time = $4, booking_end_time = $5
+       WHERE id = (SELECT id FROM court_status WHERE court_id = $6 ORDER BY updated_at DESC, id DESC LIMIT 1)`,
+      [eventId, booking.startDate || booking.start_date || null, booking.endDate || booking.end_date || null, booking.startTime || booking.start_time || null, booking.endTime || booking.end_time || null, courtId]
+    );
+  }
+};

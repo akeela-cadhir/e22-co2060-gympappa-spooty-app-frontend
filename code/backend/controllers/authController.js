@@ -6,7 +6,8 @@ import {
   extractFacultyAndBatch 
 } from '../utils/userUtils.js';
 import { generateToken } from '../utils/jwtUtils.js';
-import admin from 'firebase-admin';
+// import admin from 'firebase-admin';
+import { getAuth } from 'firebase-admin/auth';
 
 const ALLOWED_ROLES = [
   'student',
@@ -201,7 +202,8 @@ export const verifyFirebaseToken = async (req, res) => {
     }
 
     // Verify Firebase token
-    const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    // const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    const decodedToken = await getAuth().verifyIdToken(firebaseToken);
     const email = decodedToken.email;
 
     if (!email) {

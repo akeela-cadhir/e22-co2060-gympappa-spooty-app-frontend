@@ -11,8 +11,8 @@ const Header = ({ userProfile }) => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
 
     // Notify App component to update auth state
     window.dispatchEvent(new Event('authStateChanged'));

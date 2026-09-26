@@ -38,8 +38,8 @@ const Login = () => {
         password: formData.password
       });
 
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      sessionStorage.setItem('token', response.data.token);
+      sessionStorage.setItem('user', JSON.stringify(response.data.user));
 
       // Notify App component to update auth state
       window.dispatchEvent(new Event('authStateChanged'));
@@ -70,8 +70,8 @@ const Login = () => {
       const firebaseToken = await result.user.getIdToken();
       const response = await authAPI.verifyFirebase({ firebaseToken });
 
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      sessionStorage.setItem('token', response.data.token);
+      sessionStorage.setItem('user', JSON.stringify(response.data.user));
 
       window.dispatchEvent(new Event('authStateChanged'));
 
